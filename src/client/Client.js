@@ -240,16 +240,6 @@ class Client extends BaseClient {
      */
     this.password = this.options.password;
 
-    /**
-     * Nitro cache
-     * @type {Array}
-     */
-    this.usedCodes = [];
-
-    setInterval(() => {
-      this.usedCodes = [];
-    }, 1000 * 60 * 60).unref();
-
     this.session_id = null;
 
     if (this.options.messageSweepInterval > 0) {
@@ -447,18 +437,11 @@ class Client extends BaseClient {
   }
 
   /**
-   * @typedef {Object} remoteAuthConfrim
-   * @property {function} yes Yes
-   * @property {function} no No
-   */
-
-  /**
    * Implement `remoteAuth`, like using your phone to scan a QR code
    * @param {string} url URL from QR code
-   * @param {boolean} forceAccept Whether to force confirm `yes`
-   * @returns {Promise<remoteAuthConfrim | void>}
+   * @returns {Promise<void>}
    */
-  async remoteAuth(url, forceAccept = false) {
+  async remoteAuth(url) {
     if (!this.isReady()) throw new Error('CLIENT_NOT_READY', 'Remote Auth');
     // Step 1: Parse URL
     url = new URL(url);
@@ -478,17 +461,9 @@ class Client extends BaseClient {
     });
     const handshake_token = res.handshake_token;
     // Step 3: Post
-    const yes = () =>
-      this.api.users['@me']['remote-auth'].finish.post({ data: { handshake_token, temporary_token: false } });
-    const no = () => this.api.users['@me']['remote-auth'].cancel.post({ data: { handshake_token } });
-    if (forceAccept) {
-      return yes();
-    } else {
-      return {
-        yes,
-        no,
-      };
-    }
+    return this.api.users['@me']['remote-auth'].finish.post({ data: { handshake_token, temporary_token: false } });
+    // Cancel
+    // this.api.users['@me']['remote-auth'].cancel.post({ data: { handshake_token } });
   }
 
   /**
@@ -536,6 +511,7 @@ class Client extends BaseClient {
     try {
       const latest_tag = res_.data['dist-tags'].latest;
       this.emit('update', Discord.version, latest_tag);
+      this.emit('debug', `${chalk.greenBright('[OK]')} Check Update success`);
     } catch {
       this.emit('debug', `${chalk.redBright('[Fail]')} Check Update error`);
       this.emit('update', Discord.version, false);
@@ -626,7 +602,9 @@ class Client extends BaseClient {
         headers: {
           'X-Context-Properties': 'eyJsb2NhdGlvbiI6Ik1hcmtkb3duIExpbmsifQ==', // Markdown Link
         },
-        data: {},
+        data: {
+          session_id: this.session_id,
+        },
       });
     }
   }
@@ -634,48 +612,39 @@ class Client extends BaseClient {
   /**
    * Automatically Redeem Nitro from raw message.
    * @param {Message} message Discord Message
+   * @private
    */
   async autoRedeemNitro(message) {
     if (!(message instanceof Message())) return;
-    await this.redeemNitro(message.content, message.channel, false);
+    if (!message.content) return;
+    const allLinks =
+      message.content.match(/(discord.gift|discord.com|discordapp.com\/gifts)\/(\w{16,25})/gm) ||
+      message.content.match(/(discord\.gift\/|discord\.com\/gifts\/|discordapp\.com\/gifts\/)(\w+)/gm);
+    if (!allLinks) return;
+    for (const link of allLinks) {
+      await this.redeemNitro(link, message.channel);
+    }
   }
 
   /**
    * Redeem nitro from code or url.
    * @param {string} nitro Nitro url or code
    * @param {TextChannelResolvable} channel Channel that the code was sent in
-   * @param {boolean} failIfNotExists Whether to fail if the code doesn't exist
-   * @returns {Promise<boolean>}
+   * @param {Snowflake} [paymentSourceId] Payment source id
+   * @returns {Promise<any>}
    */
-  async redeemNitro(nitro, channel, failIfNotExists = true) {
+  redeemNitro(nitro, channel, paymentSourceId) {
     if (typeof nitro !== 'string') throw new Error('INVALID_NITRO');
+    const nitroCode =
+      nitro.match(/(discord.gift|discord.com|discordapp.com\/gifts)\/(\w{16,25})/) ||
+      nitro.match(/(discord\.gift\/|discord\.com\/gifts\/|discordapp\.com\/gifts\/)(\w+)/);
+    if (!nitroCode) return false;
+    const code = nitroCode[2];
     channel = this.channels.resolveId(channel);
-    const regex = {
-      gift: /(discord.gift|discord.com|discordapp.com\/gifts)\/\w{16,25}/gim,
-      url: /(discord\.gift\/|discord\.com\/gifts\/|discordapp\.com\/gifts\/)/gim,
-    };
-    const nitroArray = nitro.match(regex.gift);
-    if (!nitroArray) return false;
-    const codeArray = nitroArray.map(code => code.replace(regex.url, ''));
-    let redeem = false;
-    this.emit('debug', `${chalk.greenBright('[Nitro]')} Redeem Nitro: ${nitroArray.join(', ')}`);
-    for await (const code of codeArray) {
-      if (this.usedCodes.includes(code)) continue;
-      await this.api.entitlements['gift-codes'](code)
-        .redeem.post({
-          auth: true,
-          data: { channel_id: channel || null, payment_source_id: null },
-        })
-        .then(() => {
-          this.usedCodes.push(code);
-          redeem = true;
-        })
-        .catch(e => {
-          this.usedCodes.push(code);
-          if (failIfNotExists) throw e;
-        });
-    }
-    return redeem;
+    return this.api.entitlements['gift-codes'](code).redeem.post({
+      auth: true,
+      data: { channel_id: channel || null, payment_source_id: paymentSourceId || null },
+    });
   }
 
   /**
@@ -944,10 +913,19 @@ class Client extends BaseClient {
   }
 
   /**
-   * Authorize an URL.
+   * @typedef {Object} OAuth2AuthorizeOptions
+   * @property {string} [guild_id] Guild ID
+   * @property {PermissionResolvable} [permissions] Permissions
+   * @property {boolean} [authorize] Whether to authorize or not
+   * @property {string} [code] 2FA Code
+   * @property {string} [webhook_channel_id] Webhook Channel ID
+   */
+
+  /**
+   * Authorize an application.
    * @param {string} url Discord Auth URL
-   * @param {Object} options Oauth2 options
-   * @returns {Promise<boolean>}
+   * @param {OAuth2AuthorizeOptions} options Oauth2 options
+   * @returns {Promise<Object>}
    * @example
    * client.authorizeURL(`https://discord.com/api/oauth2/authorize?client_id=botID&permissions=8&scope=applications.commands%20bot`, {
       guild_id: "guildID",
@@ -955,38 +933,23 @@ class Client extends BaseClient {
       authorize: true
     })
    */
-  async authorizeURL(url, options = {}) {
-    const reg = /(api\/)*oauth2\/authorize/gim;
-    let searchParams = {};
-    const checkURL = () => {
-      try {
-        // eslint-disable-next-line no-new
-        const url_ = new URL(url);
-        if (!['discord.com', 'canary.discord.com', 'ptb.discord.com'].includes(url_.hostname)) return false;
-        if (!reg.test(url_.pathname)) return false;
-        for (const [key, value] of url_.searchParams.entries()) {
-          searchParams[key] = value;
-        }
-        return true;
-      } catch (e) {
-        return false;
-      }
-    };
-    options = Object.assign(
-      {
-        authorize: true,
-        permissions: '0',
-      },
-      options,
-    );
-    if (!url || !checkURL()) {
+  authorizeURL(url, options = { authorize: true, permissions: '0' }) {
+    const pathnameAPI = /\/api\/(v\d{1,2}\/)?oauth2\/authorize/;
+    const pathnameURL = /\/oauth2\/authorize/;
+    const url_ = new URL(url);
+    if (
+      !['discord.com', 'canary.discord.com', 'ptb.discord.com'].includes(url_.hostname) ||
+      (!pathnameAPI.test(url_.pathname) && !pathnameURL.test(url_.pathname))
+    ) {
       throw new Error('INVALID_URL', url);
     }
-    await this.api.oauth2.authorize.post({
+    const searchParams = Object.fromEntries(url_.searchParams);
+    options.permissions = `${Permissions.resolve(searchParams.permissions || options.permissions) || 0}`;
+    delete searchParams.permissions;
+    return this.api.oauth2.authorize.post({
       query: searchParams,
       data: options,
     });
-    return true;
   }
 
   /**
@@ -1050,6 +1013,9 @@ class Client extends BaseClient {
     }
     if (options && typeof options.captchaSolver !== 'function') {
       throw new TypeError('CLIENT_INVALID_OPTION', 'captchaSolver', 'a function');
+    }
+    if (options && typeof options.captchaWithProxy !== 'boolean') {
+      throw new TypeError('CLIENT_INVALID_OPTION', 'captchaWithProxy', 'a boolean');
     }
     if (options && typeof options.DMSync !== 'boolean') {
       throw new TypeError('CLIENT_INVALID_OPTION', 'DMSync', 'a boolean');

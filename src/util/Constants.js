@@ -4,9 +4,9 @@ const process = require('node:process');
 const Package = (exports.Package = require('../../package.json'));
 */
 const { Error, RangeError, TypeError } = require('../errors');
-// #88: https://jnrbsn.github.io/user-agents/user-agents.json
+
 exports.defaultUA =
-  'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) discord/1.0.9012 Chrome/108.0.5359.215 Electron/22.3.2 Safari/537.36';
+  'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) discord/1.0.9013 Chrome/108.0.5359.215 Electron/22.3.2 Safari/537.36';
 
 /**
  * Max bulk deletable message age
@@ -186,7 +186,7 @@ exports.Endpoints = {
     return {
       Emoji: (emojiId, format = 'webp') => `${root}/emojis/${emojiId}.${format}`,
       Asset: name => `${root}/assets/${name}`,
-      DefaultAvatar: discriminator => `${root}/embed/avatars/${discriminator}.png`,
+      DefaultAvatar: index => `${root}/embed/avatars/${index}.png`,
       Avatar: (userId, hash, format, size, dynamic = false) => {
         if (dynamic && hash.startsWith('a_')) format = 'gif';
         return makeImageUrl(`${root}/avatars/${userId}/${hash}`, { format, size });
@@ -287,12 +287,17 @@ exports.Status = {
  * * STREAM_WATCH: 20
  * * STREAM_PING: 21 #  Send
  * * STREAM_SET_PAUSED: 22
- * * REQUEST_APPLICATION_COMMANDS: 24
+ * * REQUEST_GUILD_APPLICATION_COMMANDS: 24
  * * EMBEDDED_ACTIVITY_LAUNCH: 25
  * * EMBEDDED_ACTIVITY_CLOSE: 26
  * * EMBEDDED_ACTIVITY_UPDATE: 27
  * * REQUEST_FORUM_UNREADS: 28
  * * REMOTE_COMMAND: 29
+ * * GET_DELETED_ENTITY_IDS_NOT_MATCHING_HASH: 30
+ * * REQUEST_SOUNDBOARD_SOUNDS: 31
+ * * SPEED_TEST_CREATE: 32
+ * * SPEED_TEST_DELETE: 33
+ * * REQUEST_LAST_MESSAGES: 34
  * @typedef {Object<string, number>} Opcodes
  */
 exports.Opcodes = {
@@ -319,12 +324,18 @@ exports.Opcodes = {
   STREAM_WATCH: 20,
   STREAM_PING: 21, // #  Send
   STREAM_SET_PAUSED: 22,
-  REQUEST_APPLICATION_COMMANDS: 24, // #  Send => request application/bot cmds (user, message, and slash cmds)
+  REQUEST_GUILD_APPLICATION_COMMANDS: 24, // #  Send => request application/bot cmds (user, message, and slash cmds)
   EMBEDDED_ACTIVITY_LAUNCH: 25,
   EMBEDDED_ACTIVITY_CLOSE: 26,
   EMBEDDED_ACTIVITY_UPDATE: 27,
   REQUEST_FORUM_UNREADS: 28,
   REMOTE_COMMAND: 29,
+  GET_DELETED_ENTITY_IDS_NOT_MATCHING_HASH: 30,
+  REQUEST_SOUNDBOARD_SOUNDS: 31, // Payload: { guild_ids: string[] }
+  SPEED_TEST_CREATE: 32,
+  SPEED_TEST_DELETE: 33,
+  REQUEST_LAST_MESSAGES: 34, // Payload: { guild_id: string, channel_ids: string[] }
+  // Update: 30/5/2023
 };
 
 /**
@@ -520,6 +531,13 @@ exports.Events = {
   RELATIONSHIP_UPDATE: 'relationshipUpdate',
   UNHANDLED_PACKET: 'unhandledPacket',
   CAPTCHA_REQUIRED: 'captchaRequired',
+  // ! TODO: Add more events
+  SOUNDBOARD_SOUNDS: 'soundboardSounds',
+  VOICE_CHANNEL_EFFECT_SEND: 'voiceChannelEffectSend',
+  GUILD_SOUNDBOARD_SOUND_CREATE: 'guildSoundboardSoundCreate',
+  GUILD_SOUNDBOARD_SOUND_UPDATE: 'guildSoundboardSoundUpdate',
+  GUILD_SOUNDBOARD_SOUNDS_UPDATE: 'guildSoundboardSoundsUpdate',
+  GUILD_SOUNDBOARD_SOUND_DELETE: 'guildSoundboardSoundDelete',
 };
 
 /**
@@ -1855,14 +1873,15 @@ function createEnum(keys) {
  * @property {Object<ApplicationCommandType, number>} ApplicationCommandTypes
  * The type of an {@link ApplicationCommand} object.
  * @property {Object<ApplicationRoleConnectionMetadataType, number>} ApplicationRoleConnectionMetadataTypes
- * @property {Object<AutoModerationRuleTriggerType, number>} AutoModerationRuleTriggerTypes Characterizes the type
- * of content which can trigger the rule.
+ * The type of an {@link ApplicationRoleConnectionMetadata} object.
  * @property {Object<AutoModerationActionType, number>} AutoModerationActionTypes
  * A type of an action which executes whenever a rule is triggered.
+ * @property {Object<AutoModerationRuleEventType, number>} AutoModerationRuleEventTypes Indicates in what event context
+ * a rule should be checked.
  * @property {Object<AutoModerationRuleKeywordPresetType, number>} AutoModerationRuleKeywordPresetTypes
  * The internally pre-defined wordsetswhich will be searched for in content
- * @property {Object<AutoModerationRuleEventType, number>} AutoModerationRuleEventTypes Indicates in what event context
- *  a rule should be checked.
+ * @property {Object<AutoModerationRuleTriggerType, number>} AutoModerationRuleTriggerTypes Characterizes the type
+ * of content which can trigger the rule.
  * @property {Object<ChannelType, number>} ChannelTypes All available channel types.
  * @property {ClientApplicationAssetTypes} ClientApplicationAssetTypes The types of an {@link ApplicationAsset} object.
  * @property {Object<Color, number>} Colors An object with regularly used colors.
@@ -1883,9 +1902,11 @@ function createEnum(keys) {
  * @property {Object<InteractionResponseType, number>} InteractionResponseTypes The type of an interaction response.
  * @property {Object<InteractionType, number>} InteractionTypes The type of an {@link Interaction} object.
  * @property {InviteScope[]} InviteScopes The scopes of an invite.
+ * @property {number} MaxBulkDeletableMessageAge Max bulk deletable message age (Unavailable to selfbots)
  * @property {Object<MembershipState, number>} MembershipStates The value set for a team members membership state.
  * @property {Object<MessageButtonStyle, number>} MessageButtonStyles The style of a message button.
  * @property {Object<MessageComponentType, number>} MessageComponentTypes The type of a message component.
+ * @property {MessageType[]} MessageTypes The type of a {@link Message} object.
  * @property {Object<SelectMenuComponentType, number>} SelectMenuComponentTypes The type of any select menu.
  * @property {Object<MFALevel, number>} MFALevels The required MFA level for a guild.
  * @property {Object<NSFWLevel, number>} NSFWLevels NSFW level of a guild.
@@ -1902,7 +1923,7 @@ function createEnum(keys) {
  * @property {SweeperKey[]} SweeperKeys The name of an item to be swept in Sweepers.
  * @property {SystemMessageType[]} SystemMessageTypes The types of messages that are `System`.
  * @property {Object<TextInputStyle, number>} TextInputStyles The style of a text input component.
- * @property {number} MaxBulkDeletableMessageAge Max bulk deletable message age
+ * @property {ThreadChannelTypes[]} ThreadChannelTypes The type of a {@link ThreadChannel} object.
  * @property {string} UserAgent The user agent used for requests.
  * @property {Object<VerificationLevel, number>} VerificationLevels
  * The value set for the verification levels for a guild.

@@ -87,13 +87,18 @@ class ClientUser extends User {
     if ('bio' in data) {
       this.bio = data.bio;
     }
+    if ('pronouns' in data) {
+      this.pronouns = data.pronouns;
+    }
 
-    /**
-     * The friend nicknames cache of the client user.
-     * @type {Collection<Snowflake, string>}
-     * @private
-     */
-    if (!this.friendNicknames?.size) this.friendNicknames = new Collection();
+    if (!this.friendNicknames?.size) {
+      /**
+       * The friend nicknames cache of the client user.
+       * @type {Collection<Snowflake, string>}
+       * @private
+       */
+      this.friendNicknames = new Collection();
+    }
 
     if (!this._intervalSamsungPresence) {
       this._intervalSamsungPresence = setInterval(() => {
@@ -168,7 +173,6 @@ class ClientUser extends User {
     }
     return this.edit({
       username,
-      discriminator: this.discriminator,
       password: this.client.password ? this.client.password : password,
     });
   }
@@ -463,26 +467,46 @@ class ClientUser extends User {
 
   /**
    * Create an invite [Friend Invites]
-   * maxAge: 86400 | maxUses: 0
+   * maxAge: 604800 | maxUses: 1
    * @returns {Promise<Invite>}
    * @see {@link https://github.com/13-05/hidden-disc-docs#js-snippet-for-creating-friend-invites}
    * @example
    * // Options not working
-   * client.user.getInvite();
+   * client.user.createFriendInvite();
    *   .then(console.log)
    *   .catch(console.error);
    */
-  async getInvite() {
+  async createFriendInvite() {
     const data = await this.client.api.users['@me'].invites.post({
-      data: {
-        validate: null,
-        max_age: 86400,
-        max_uses: 0,
-        target_type: 2,
-        temporary: false,
-      },
+      data: {},
     });
     return new Invite(this.client, data);
+  }
+
+  /**
+   * Get all friend invites
+   * @returns {Promise<Collection<string, Invite>>}
+   */
+  async getAllFriendInvites() {
+    const data = await this.client.api.users['@me'].invites.get();
+    const collection = new Collection();
+    for (const invite of data) {
+      collection.set(invite.code, new Invite(this.client, invite));
+    }
+    return collection;
+  }
+
+  /**
+   * Revoke all friend invites
+   * @returns {Promise<Collection<string, Invite>>}
+   */
+  async revokeAllFriendInvites() {
+    const data = await this.client.api.users['@me'].invites.delete();
+    const collection = new Collection();
+    for (const invite of data) {
+      collection.set(invite.code, new Invite(this.client, invite));
+    }
+    return collection;
   }
 
   /**
@@ -580,6 +604,24 @@ class ClientUser extends User {
    */
   fetchBurstCredit() {
     return this.client.api.users['@me']['burst-credits'].get().then(d => d.amount);
+  }
+
+  /**
+   * Set global display name
+   * @param {string} globalName The new display name
+   * @returns {Promise<ClientUser>}
+   */
+  setGlobalName(globalName = '') {
+    return this.edit({ global_name: globalName });
+  }
+
+  /**
+   * Set pronouns
+   * @param {?string} pronouns Your pronouns
+   * @returns {Promise<ClientUser>}
+   */
+  setPronouns(pronouns = '') {
+    return this.edit({ pronouns });
   }
 }
 

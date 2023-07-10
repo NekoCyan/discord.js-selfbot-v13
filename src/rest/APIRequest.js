@@ -3,8 +3,13 @@
 const Buffer = require('node:buffer').Buffer;
 const https = require('node:https');
 const { setTimeout } = require('node:timers');
+const makeFetchCookie = require('fetch-cookie');
 const FormData = require('form-data');
-const fetch = require('node-fetch');
+const fetchOriginal = require('node-fetch');
+const { CookieJar } = require('tough-cookie');
+
+const cookieJar = new CookieJar();
+const fetch = makeFetchCookie(fetchOriginal, cookieJar);
 
 let agent = null;
 
@@ -32,6 +37,9 @@ class APIRequest {
       if (typeof this.client.options.proxy === 'string' && this.client.options.proxy.length > 0) {
         const proxy = require('proxy-agent');
         agent = new proxy(this.client.options.proxy);
+      } else if (this.client.options.http.agent instanceof https.Agent) {
+        agent = this.client.options.http.agent;
+        agent.keepAlive = true;
       } else {
         agent = new https.Agent({ ...this.client.options.http.agent, keepAlive: true });
       }
@@ -45,26 +53,24 @@ class APIRequest {
 
     let headers = {
       ...this.client.options.http.headers,
-      Accept: '*/*',
-      origin: 'https://discord.com',
-      'Accept-Language': 'en-US',
-      'Sec-Fetch-Dest': 'empty',
-      'Sec-Fetch-Mode': 'cors',
-      'Sec-Fetch-Site': 'same-origin',
-      'X-Debug-Options': 'bugReporterEnabled',
-      'X-Super-Properties': `${Buffer.from(
+      accept: '*/*',
+      'accept-language': 'en-US',
+      'sec-ch-ua': `"Not?A_Brand";v="8", "Chromium";v="108"`,
+      'sec-ch-ua-mobile': '?0',
+      'sec-ch-ua-platform': '"Windows"',
+      'sec-fetch-dest': 'empty',
+      'sec-fetch-mode': 'cors',
+      'sec-fetch-site': 'same-origin',
+      'x-debug-options': 'bugReporterEnabled',
+      'x-discord-locale': 'en-US',
+      'x-discord-timezone': 'Asia/Saigon',
+      'x-super-properties': `${Buffer.from(
         this.client.options.jsonTransformer(this.client.options.ws.properties),
         'ascii',
       ).toString('base64')}`,
-      'X-Discord-Locale': 'en-US',
-      'User-Agent': this.client.options.http.headers['User-Agent'],
       Referer: 'https://discord.com/channels/@me',
-      Connection: 'keep-alive',
-      'sec-ch-ua-mobile': '?0',
-      'sec-ch-ua-platform': 'Windows',
-      'sec-ch-ua': `"Not?A_Brand";v="8", "Chromium";v="${
-        /Chrome\/(\d+)/.exec(this.client.options.http.headers['User-Agent'])[1]
-      }"`,
+      origin: 'https://discord.com',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
     };
 
     if (this.options.auth !== false) headers.Authorization = this.rest.getAuth();
@@ -79,6 +85,10 @@ class APIRequest {
         'User-Agent': this.client.options.http.headers['User-Agent'],
       };
     }
+    if (captchaKey && typeof captchaKey == 'string') {
+      headers['x-captcha-key'] = captchaKey;
+      if (captchaRqtoken) headers['x-captcha-rqtoken'] = captchaRqtoken;
+    }
 
     let body;
     if (this.options.files?.length) {
@@ -92,29 +102,18 @@ class APIRequest {
         } else {
           body.append('payload_json', JSON.stringify(this.options.data));
         }
-      } else if (typeof this.options.body !== 'undefined') {
-        if (this.options.dontUsePayloadJSON) {
-          for (const [key, value] of Object.entries(this.options.body)) body.append(key, value);
-        } else {
-          body.append('payload_json', JSON.stringify(this.options.body));
-        }
       }
       headers = Object.assign(headers, body.getHeaders());
       // eslint-disable-next-line eqeqeq
     } else if (this.options.data != null) {
-      headers['Content-Type'] = 'application/json';
-      if (captchaKey && typeof captchaKey == 'string') {
-        if (!this.options.data) this.options.data = {};
-        // Delete cookie (https://t.me/DMDGOBugsAndFeatures/626) Wtf Unknown Message Error ???
-        headers.Cookie = undefined;
-        this.options.data.captcha_key = captchaKey;
-        if (captchaRqtoken) this.options.data.captcha_rqtoken = captchaRqtoken;
+      if (this.options.useFormDataPayloadJSON) {
+        body = new FormData();
+        body.append('payload_json', JSON.stringify(this.options.data));
+        headers = Object.assign(headers, body.getHeaders());
+      } else {
+        body = JSON.stringify(this.options.data);
+        headers['Content-Type'] = 'application/json';
       }
-      body = this.options.data ? JSON.stringify(this.options.data) : undefined;
-    } else if (this.options.body != null) {
-      body = new FormData();
-      body.append('payload_json', JSON.stringify(this.options.body));
-      headers = Object.assign(headers, body.getHeaders());
     }
 
     const controller = new AbortController();

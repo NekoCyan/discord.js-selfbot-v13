@@ -42,6 +42,7 @@ const { defaultUA } = require('../util/Constants');
  * @property {string} [captchaService=null] Captcha service to use for solving captcha {@link captchaServices}
  * @property {string} [captchaKey=null] Captcha service key
  * @property {string} [captchaRetryLimit=3] Captcha retry limit
+ * @property {string} [captchaWithProxy=false] Whether to use proxy for captcha solving
  * @property {string} [password=null] Your Discord account password
  * @property {boolean} [usingNewAttachmentAPI=true] Use new attachment API
  * @property {string} [interactionTimeout=15000] The amount of time in milliseconds to wait for an interaction response, before rejecting
@@ -166,6 +167,7 @@ class Options extends null {
       captchaService: '',
       captchaKey: null,
       captchaRetryLimit: 3,
+      captchaWithProxy: false,
       DMSync: false,
       patchVoice: false,
       password: null,
@@ -197,14 +199,15 @@ class Options extends null {
           os: 'Windows',
           browser: 'Discord Client',
           release_channel: 'stable',
-          client_version: '1.0.9012',
-          os_version: '10.0.22621',
+          client_version: '1.0.9013',
+          os_version: '10.0.19045',
           os_arch: 'x64',
           system_locale: 'en-US',
-          client_build_number: 190187,
-          native_build_number: 31718,
+          browser_user_agent: defaultUA,
+          browser_version: '22.3.2',
+          client_build_number: 208166,
+          native_build_number: 33666,
           client_event_source: null,
-          design_id: 0,
         },
         version: 9,
         client_state: {

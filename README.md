@@ -12,9 +12,12 @@
   </p>
 </div>
 
+## Words from the Developer
+- I'm on vacation so the library won't update much :3
+
 ## About
 
-<strong>Welcome to `discord.js-selfbot-v13@v2.13`, based on `discord.js@13.15`</strong>
+<strong>Welcome to `discord.js-selfbot-v13@v2.14`, based on `discord.js@13.16`</strong>
 
 - discord.js-selfbot-v13 is a [Node.js](https://nodejs.org) module that allows user accounts to interact with the Discord API v9.
 
@@ -47,6 +50,7 @@
 ### Optional packages
 
 - [2captcha](https://www.npmjs.com/package/2captcha) for solving captcha (`npm install 2captcha`)
+- [node-capmonster](https://www.npmjs.com/package/node-capmonster) for solving captcha (`npm install node-capmonster`)
 
 ## Installation
 
@@ -122,5 +126,10 @@ Github Discussion: [Here](https://github.com/aiko-chan-ai/discord.js-selfbot-v13
 - 📕 [***aiko-chan-ai/Discord-Markdown***](https://github.com/aiko-chan-ai/Discord-Markdown) <br/>
   Better Markdown to text chat Discord.
 - 📗 ...
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=aiko-chan-ai/discord.js-selfbot-v13&type=Date)](https://star-history.com/#aiko-chan-ai/discord.js-selfbot-v13&Date)
+
 
 # From Github with love 💕

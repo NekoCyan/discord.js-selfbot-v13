@@ -1,7 +1,19 @@
-# Quick Links:
-- [Interaction](https://github.com/aiko-chan-ai/discord.js-selfbot-v13/blob/main/Document/Message.md#interaction)
-- [Embed](https://github.com/aiko-chan-ai/discord.js-selfbot-v13/blob/main/Document/Message.md#messageembed-)
-- [Slash command demo](https://github.com/aiko-chan-ai/discord.js-selfbot-v13/blob/main/Document/SlashCommand.md)
+## Voice Message
+```js
+        const channel = client.channels.cache.get('cid');
+        const attachment = new Discord.MessageAttachment(
+            './test.mp3', // path file
+            'test.ogg', // must be .ogg
+            {
+                waveform: '=',
+                duration_secs: 1, // any number you want
+            },
+        );
+        channel.send({
+            files: [attachment],
+            flags: 'IS_VOICE_MESSAGE',
+        });
+```
 
 ## Interaction
 <details open>
@@ -55,7 +67,7 @@ const Discord = require('discord.js-selfbot-v13');
 // Selfhost WebEmbed: https://github.com/aiko-chan-ai/WebEmbed
 const w = new Discord.WebEmbed({
   shorten: true,
-  hidden: false // if you send this embed with MessagePayload.options.embeds, it must set to false
+  hidden: false, // if you send this embed with MessagePayload.options.embeds, it must set to false
   baseURL: '', // if you want self-host API, else skip :v
   shortenAPI: '', // if you want Custom shortenAPI (Method: Get, response: Text => URL), else skip :v
 })

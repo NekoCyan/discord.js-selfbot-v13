@@ -1,5 +1,6 @@
 'use strict';
 
+const process = require('node:process');
 const { Collection } = require('@discordjs/collection');
 const Base = require('./Base');
 const ClientApplication = require('./ClientApplication');
@@ -9,6 +10,9 @@ const { Error } = require('../errors');
 const { RelationshipTypes, NitroType } = require('../util/Constants');
 const SnowflakeUtil = require('../util/SnowflakeUtil');
 const UserFlags = require('../util/UserFlags');
+const Util = require('../util/Util');
+
+let tagDeprecationEmitted = false;
 
 /**
  * Represents a user on Discord.
@@ -50,33 +54,29 @@ class User extends Base {
      * Time that User has nitro (Unix Timestamp)
      * <info>The user must be force fetched for this property to be present or be updated</info>
      * @type {?number}
-     * @readonly
      */
     this.premiumSince = null;
     /**
      * Time that User has nitro and boost server (Unix Timestamp)
      * @type {?number}
-     * @readonly
      */
     this.premiumGuildSince = null;
     /**
      * About me (User)
      * <info>The user must be force fetched for this property to be present or be updated</info>
      * @type {?string}
-     * @readonly
      */
     this.bio = null;
     /**
-     * This user is on the same servers as Client User
+     * Pronouns (User)
      * <info>The user must be force fetched for this property to be present or be updated</info>
-     * @type {Collection<Snowflake, Guild>}
-     * @readonly
+     * @type {?string}
      */
-    this.mutualGuilds = new Collection();
+    this.pronouns = null;
+    this._mutualGuilds = [];
     /**
      * [Bot] Application
      * @type {?ClientApplication}
-     * @readonly
      */
     this.application = application ? new ClientApplication(this.client, application, this) : null;
     this._partial = true;
@@ -92,6 +92,16 @@ class User extends Base {
       this.username = data.username;
     } else {
       this.username ??= null;
+    }
+
+    if ('global_name' in data) {
+      /**
+       * The global name of this user
+       * @type {?string}
+       */
+      this.globalName = data.global_name;
+    } else {
+      this.globalName ??= null;
     }
 
     if ('bot' in data) {
@@ -110,7 +120,8 @@ class User extends Base {
 
     if ('discriminator' in data) {
       /**
-       * A discriminator based on username for the user
+       * The discriminator of this user
+       * <info>`'0'`, or a 4-digit stringified number if they're using the legacy username system</info>
        * @type {?string}
        */
       this.discriminator = data.discriminator;
@@ -185,6 +196,16 @@ class User extends Base {
     } else {
       this.avatarDecoration ??= null;
     }
+  }
+
+  /**
+   * This user is on the same servers as Client User
+   * <info>The user must be force fetched for this property to be present or be updated</info>
+   * @type {Collection<Snowflake, Guild>}
+   * @readonly
+   */
+  get mutualGuilds() {
+    return new Collection(this._mutualGuilds.map(obj => [obj.id, obj]));
   }
 
   /**
@@ -320,7 +341,9 @@ class User extends Base {
       // Unknown
     }
 
-    this.mutualGuilds = new Collection(data.mutual_guilds.map(obj => [obj.id, obj]));
+    if ('mutual_guilds' in data) {
+      this._mutualGuilds = data.mutual_guilds;
+    }
   }
 
   /**
@@ -362,7 +385,7 @@ class User extends Base {
    * @returns {Promise<boolean>}
    */
   setNickname(nickname) {
-    return this.client.user.setNickname(this.id, nickname);
+    return this.client.relationships.setNickname(this.id, nickname);
   }
 
   /**
@@ -453,7 +476,8 @@ class User extends Base {
    * @readonly
    */
   get defaultAvatarURL() {
-    return this.client.rest.cdn.DefaultAvatar(this.discriminator % 5);
+    const index = this.discriminator === '0' ? Util.calculateUserDefaultAvatarIndex(this.id) : this.discriminator % 5;
+    return this.client.rest.cdn.DefaultAvatar(index);
   }
 
   /**
@@ -527,12 +551,32 @@ class User extends Base {
   }
 
   /**
-   * The Discord "tag" (e.g. `hydrabolt#0001`) for this user
+   * The tag of this user
+   * <info>This user's username, or their legacy tag (e.g. `hydrabolt#0001`)
+   * if they're using the legacy username system</info>
    * @type {?string}
+   * @deprecated Use {@link User#username} instead.
    * @readonly
    */
   get tag() {
-    return typeof this.username === 'string' ? `${this.username}#${this.discriminator}` : null;
+    if (!tagDeprecationEmitted) {
+      process.emitWarning('User#tag is deprecated. Use User#username instead.', 'DeprecationWarning');
+      tagDeprecationEmitted = true;
+    }
+    return typeof this.username === 'string'
+      ? this.discriminator === '0'
+        ? this.username
+        : `${this.username}#${this.discriminator}`
+      : null;
+  }
+
+  /**
+   * The global name of this user, or their username if they don't have one
+   * @type {?string}
+   * @readonly
+   */
+  get displayName() {
+    return this.globalName ?? this.username;
   }
 
   /**
@@ -574,6 +618,7 @@ class User extends Base {
       this.id === user.id &&
       this.username === user.username &&
       this.discriminator === user.discriminator &&
+      this.globalName === user.globalName &&
       this.avatar === user.avatar &&
       this.flags?.bitfield === user.flags?.bitfield &&
       this.banner === user.banner &&
@@ -594,6 +639,7 @@ class User extends Base {
       this.id === user.id &&
       this.username === user.username &&
       this.discriminator === user.discriminator &&
+      this.globalName === user.global_name &&
       this.avatar === user.avatar &&
       this.flags?.bitfield === user.public_flags &&
       ('banner' in user ? this.banner === user.banner : true) &&
