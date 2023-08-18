@@ -2317,7 +2317,6 @@ export class WebEmbed {
   public constructor(data?: WebEmbedOptions);
   public author: MessageEmbedAuthor | null;
   public baseURL: string | undefined;
-  public shortenAPI: string | undefined;
   public color: number | null;
   public description: string | null;
   public image: MessageEmbedImage | null;
@@ -3273,7 +3272,6 @@ export class User extends PartialTextBasedChannel(Base) {
   public id: Snowflake;
   public readonly partial: false;
   public system: boolean;
-  /** @deprecated Use {@link User#username} instead. */
   public readonly tag: string;
   public username: string;
   public readonly note: string | null;
@@ -3439,6 +3437,7 @@ export class VoiceState extends Base {
   public setRequestToSpeak(request?: boolean): Promise<void>;
   public setSuppressed(suppressed?: boolean): Promise<void>;
   public getPreview(): Promise<string>;
+  public postPreview(base64Image: string): Promise<void>;
 }
 
 export class Webhook extends WebhookMixin() {
@@ -4137,6 +4136,7 @@ export class GuildMemberManager extends CachedManager<Snowflake, GuildMember, Gu
     time?: number,
   ): Promise<Collection<Snowflake, GuildMember>>;
   public fetchBruteforce(options?: BruteforceOptions): Promise<Collection<Snowflake, GuildMember>>;
+  public fetchByMemberSafety(timeout?: number): Promise<Collection<Snowflake, GuildMember>>;
   public fetchMe(options?: BaseFetchOptions): Promise<GuildMember>;
   public kick(user: UserResolvable, reason?: string): Promise<GuildMember | User | Snowflake>;
   public list(options?: GuildListMembersOptions): Promise<Collection<Snowflake, GuildMember>>;
@@ -7055,6 +7055,10 @@ export type PermissionString =
 export type RecursiveArray<T> = ReadonlyArray<T | RecursiveArray<T>>;
 
 export type RecursiveReadonlyArray<T> = ReadonlyArray<T | RecursiveReadonlyArray<T>>;
+
+export interface PartialRecipient {
+  username: string;
+}
 
 export type PremiumTier = keyof typeof PremiumTiers;
 

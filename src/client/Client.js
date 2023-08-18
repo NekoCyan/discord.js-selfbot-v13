@@ -4,8 +4,8 @@ const process = require('node:process');
 const { setInterval, setTimeout } = require('node:timers');
 const { Collection } = require('@discordjs/collection');
 const { getVoiceConnection } = require('@discordjs/voice');
-const axios = require('axios');
 const chalk = require('chalk');
+const fetch = require('node-fetch');
 const BaseClient = require('./BaseClient');
 const ActionsManager = require('./actions/ActionsManager');
 const ClientVoiceManager = require('./voice/ClientVoiceManager');
@@ -240,8 +240,6 @@ class Client extends BaseClient {
      */
     this.password = this.options.password;
 
-    this.session_id = null;
-
     if (this.options.messageSweepInterval > 0) {
       process.emitWarning(
         'The message sweeping client options are deprecated, use the global sweepers instead.',
@@ -260,7 +258,7 @@ class Client extends BaseClient {
    * @readonly
    */
   get sessionId() {
-    return this.session_id;
+    return this.ws.shards.first()?.sessionId;
   }
 
   /**
@@ -471,7 +469,7 @@ class Client extends BaseClient {
    * @returns {Promise<string>} New Discord Token
    */
   createToken() {
-    return new Promise(resolve => {
+    return new Promise((resolve, reject) => {
       // Step 1: Create DiscordAuthWebsocket
       const QR = new DiscordAuthWebsocket({
         hiddenLog: true,
@@ -484,7 +482,11 @@ class Client extends BaseClient {
       });
       // Step 2: Add event
       QR.once('ready', async (_, url) => {
-        await this.remoteAuth(url, true);
+        try {
+          await this.remoteAuth(url);
+        } catch (e) {
+          reject(e);
+        }
       }).once('finish', (user, token) => {
         resolve(token);
       });
@@ -505,11 +507,11 @@ class Client extends BaseClient {
    * @returns {Promise<Client>}
    */
   async checkUpdate() {
-    const res_ = await axios
-      .get(`https://registry.npmjs.com/${encodeURIComponent('discord.js-selfbot-v13')}`)
-      .catch(() => {});
+    const res_ = await (
+      await fetch(`https://registry.npmjs.com/${encodeURIComponent('discord.js-selfbot-v13')}`)
+    ).json();
     try {
-      const latest_tag = res_.data['dist-tags'].latest;
+      const latest_tag = res_['dist-tags'].latest;
       this.emit('update', Discord.version, latest_tag);
       this.emit('debug', `${chalk.greenBright('[OK]')} Check Update success`);
     } catch {
@@ -603,7 +605,7 @@ class Client extends BaseClient {
           'X-Context-Properties': 'eyJsb2NhdGlvbiI6Ik1hcmtkb3duIExpbmsifQ==', // Markdown Link
         },
         data: {
-          session_id: this.session_id,
+          session_id: this.sessionId,
         },
       });
     }

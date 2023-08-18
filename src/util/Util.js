@@ -3,7 +3,7 @@
 const { parse } = require('node:path');
 const process = require('node:process');
 const { Collection } = require('@discordjs/collection');
-const axios = require('axios');
+const fetch = require('node-fetch');
 const { Colors } = require('./Constants');
 const { RangeError, TypeError } = require('../errors');
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -722,7 +722,20 @@ class Util extends null {
   }
 
   static uploadFile(data, url) {
-    return axios.put(url, data);
+    return new Promise((resolve, reject) => {
+      fetch(url, {
+        method: 'PUT',
+        body: data,
+      })
+        .then(res => {
+          if (res.ok) {
+            resolve(res);
+          } else {
+            reject(res);
+          }
+        })
+        .catch(reject);
+    });
   }
 
   static testImportModule(name) {
@@ -741,6 +754,96 @@ class Util extends null {
    */
   static calculateUserDefaultAvatarIndex(userId) {
     return Number(BigInt(userId) >> 22n) % 6;
+  }
+
+  static clientRequiredAction(client, code) {
+    let msg = '';
+    let stopClient = false;
+    switch (code) {
+      case null: {
+        msg = 'All required actions have been completed.';
+        break;
+      }
+      case 'AGREEMENTS': {
+        msg = 'You need to accept the new Terms of Service and Privacy Policy.';
+        // https://discord.com/api/v9/users/@me/agreements
+        client.api
+          .users('@me')
+          .agreements.patch({
+            data: {
+              terms: true,
+              privacy: true,
+            },
+          })
+          .then(() => {
+            client.emit(
+              'debug',
+              '[USER_REQUIRED_ACTION] Successfully accepted the new Terms of Service and Privacy Policy.',
+            );
+          })
+          .catch(e => {
+            client.emit(
+              'debug',
+              `[USER_REQUIRED_ACTION] Failed to accept the new Terms of Service and Privacy Policy: ${e}`,
+            );
+          });
+        break;
+      }
+      case 'REQUIRE_CAPTCHA': {
+        msg = 'You need to complete a captcha.';
+        stopClient = true;
+        break;
+      }
+      case 'REQUIRE_VERIFIED_EMAIL': {
+        msg = 'You need to verify your email.';
+        stopClient = true;
+        break;
+      }
+      case 'REQUIRE_REVERIFIED_EMAIL': {
+        msg = 'You need to reverify your email.';
+        stopClient = true;
+        break;
+      }
+      case 'REQUIRE_VERIFIED_PHONE': {
+        msg = 'You need to verify your phone number.';
+        stopClient = true;
+        break;
+      }
+      case 'REQUIRE_REVERIFIED_PHONE': {
+        msg = 'You need to reverify your phone number.';
+        stopClient = true;
+        break;
+      }
+      case 'REQUIRE_VERIFIED_EMAIL_OR_VERIFIED_PHONE': {
+        msg = 'You need to verify your email or verify your phone number.';
+        stopClient = true; // Maybe not
+        break;
+      }
+      case 'REQUIRE_REVERIFIED_EMAIL_OR_VERIFIED_PHONE': {
+        msg = 'You need to reverify your email or verify your phone number.';
+        stopClient = true;
+        break;
+      }
+      case 'REQUIRE_VERIFIED_EMAIL_OR_REVERIFIED_PHONE': {
+        msg = 'You need to verify your email or reverify your phone number.';
+        stopClient = true;
+        break;
+      }
+      case 'REQUIRE_REVERIFIED_EMAIL_OR_REVERIFIED_PHONE': {
+        msg = 'You need to reverify your email or reverify your phone number.';
+        stopClient = true;
+        break;
+      }
+      default: {
+        msg = `Unknown required action: ${code}`;
+        break;
+      }
+    }
+    if (stopClient) {
+      client.emit('error', new Error(`[USER_REQUIRED_ACTION] ${msg}`));
+    } else {
+      client.emit('debug', `[USER_REQUIRED_ACTION] ${msg}`);
+    }
   }
 }
 

@@ -194,22 +194,23 @@ class Options extends null {
       sweepers: {},
       proxy: '',
       ws: {
-        compress: false,
+        // eslint-disable-next-line no-undef
+        capabilities: 0, // https://discord-userdoccers.vercel.app/topics/gateway#gateway-capabilities
         properties: {
           os: 'Windows',
           browser: 'Discord Client',
           release_channel: 'stable',
-          client_version: '1.0.9013',
+          client_version: '1.0.9015',
           os_version: '10.0.19045',
           os_arch: 'x64',
           system_locale: 'en-US',
           browser_user_agent: defaultUA,
-          browser_version: '22.3.2',
-          client_build_number: 208166,
-          native_build_number: 33666,
+          browser_version: '22.3.12',
+          client_build_number: 215527,
+          native_build_number: 34898,
           client_event_source: null,
         },
-        version: 9,
+        compress: false,
         client_state: {
           guild_versions: {},
           highest_last_message_id: '0',
@@ -219,6 +220,7 @@ class Options extends null {
           private_channels_version: '0',
           api_code_version: 0,
         },
+        version: 9,
       },
       http: {
         agent: {},
