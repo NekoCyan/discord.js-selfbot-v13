@@ -3,7 +3,6 @@
 const GuildChannel = require('./GuildChannel');
 const TextBasedChannel = require('./interfaces/TextBasedChannel');
 const GuildTextThreadManager = require('../managers/GuildTextThreadManager');
-const InteractionManager = require('../managers/InteractionManager');
 const MessageManager = require('../managers/MessageManager');
 
 /**
@@ -20,12 +19,6 @@ class BaseGuildTextChannel extends GuildChannel {
      * @type {MessageManager}
      */
     this.messages = new MessageManager(this);
-
-    /**
-     * A manager of the interactions sent to this channel
-     * @type {InteractionManager}
-     */
-    this.interactions = new InteractionManager(this);
 
     /**
      * A manager of the threads belonging to this channel
@@ -79,6 +72,16 @@ class BaseGuildTextChannel extends GuildChannel {
        * @type {?number}
        */
       this.defaultAutoArchiveDuration = data.default_auto_archive_duration;
+    }
+
+    if ('default_thread_rate_limit_per_user' in data) {
+      /**
+       * The initial rate limit per user (slowmode) to set on newly created threads in a channel.
+       * @type {?number}
+       */
+      this.defaultThreadRateLimitPerUser = data.default_thread_rate_limit_per_user;
+    } else {
+      this.defaultThreadRateLimitPerUser ??= null;
     }
 
     if ('messages' in data) {
@@ -177,15 +180,10 @@ class BaseGuildTextChannel extends GuildChannel {
   sendTyping() {}
   createMessageCollector() {}
   awaitMessages() {}
-  createMessageComponentCollector() {}
-  awaitMessageComponent() {}
-  bulkDelete() {}
   fetchWebhooks() {}
   createWebhook() {}
   setRateLimitPerUser() {}
   setNSFW() {}
-  sendSlash() {}
-  searchInteraction() {}
 }
 
 TextBasedChannel.applyToClass(BaseGuildTextChannel, true);

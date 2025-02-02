@@ -1,12 +1,6 @@
 'use strict';
-/* Not used:
-const process = require('node:process');
-const Package = (exports.Package = require('../../package.json'));
-*/
-const { Error, RangeError, TypeError } = require('../errors');
 
-exports.defaultUA =
-  'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) discord/1.0.9015 Chrome/108.0.5359.215 Electron/22.3.12 Safari/537.36';
+const { Error, RangeError, TypeError } = require('../errors');
 
 /**
  * Max bulk deletable message age
@@ -14,121 +8,32 @@ exports.defaultUA =
  */
 exports.MaxBulkDeletableMessageAge = 1_209_600_000;
 
-/**
- * API captcha solver
- * * `2captcha` - 2captcha.com
- * * `capmonster` - capmonster.cloud
- * @typedef {string[]} captchaServices
- */
-exports.captchaServices = ['2captcha', 'capmonster', 'custom'];
+exports.UserAgent =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Electron/33.0.0 Safari/537.36';
 
 /**
- * Automatically scan and delete direct messages you receive that contain explicit media content.
- * * `NOT_SCAN` - Direct messages will not be scanned for explicit content.
- * * `NOT_FRIEND` - Scan direct messages from everyone unless they are a friend.
- * * `EVERYONE` - Scan direct messages from everyone.
- * @typedef {string} DMScanLevel
+ * Google Chrome v131 TLS ciphers
+ * @see {@link https://tls.browserleaks.com/tls}
+ * @see {@link https://github.com/yifeikong/curl-impersonate}
+ * @typedef {Array<string>} Ciphers
  */
-exports.DMScanLevel = createEnum(['NOT_SCAN', 'NOT_FRIEND', 'EVERYONE']);
-
-/**
- * This controls when stickers animate:
- * * `ALWAYS` - Always animate.
- * * `INTERACTION` - On the desktop client, stickers will animate on hover or focus. On mobile clients, stickers will animate on long-press.
- * * `NEVER` - Never animate.
- * @typedef {string} stickerAnimationMode
- */
-exports.stickerAnimationMode = createEnum(['ALWAYS', 'INTERACTION', 'NEVER']);
-
-/**
- * All available nitro types:
- * * `NONE` - None
- * * `NITRO_CLASSIC` - Nitro Classic
- * * `NITRO_BOOST` - Nitro
- * * `NITRO_BASIC` - Nitro Basic
- * * `UNKNOWN` - Unknown
- * @typedef {string} NitroType
- * @see {@link https://discord.com/developers/docs/resources/user#user-object-premium-types}
- */
-exports.NitroType = createEnum(['NONE', 'NITRO_CLASSIC', 'NITRO_BOOST', 'NITRO_BASIC']);
-
-/**
- * All available HypeSquad types:
- * * `LEAVE` - None
- * * `HOUSE_BRAVERY` - HypeSquad Bravery
- * * `HOUSE_BRILLIANCE` - HypeSquad Brilliance
- * * `HOUSE_BALANCE` - HypeSquad Balance
- * @typedef {string} HypeSquadType
- */
-exports.HypeSquadType = createEnum(['LEAVE', 'HOUSE_BRAVERY', 'HOUSE_BRILLIANCE', 'HOUSE_BALANCE']);
-
-/**
- * All locale codes:
- * * `DANISH`
- * * `GERMAN`
- * * `ENGLISH_UK`
- * * `ENGLISH_US`
- * * `SPANISH`
- * * `FRENCH`
- * * `CROATIAN`
- * * `ITALIAN`
- * * `LITHUANIAN`
- * * `HUNGARIAN`
- * * `DUTCH`
- * * `NORWEGIAN`
- * * `POLISH`
- * * `BRAZILIAN_PORTUGUESE`
- * * `ROMANIA_ROMANIAN`
- * * `FINNISH`
- * * `SWEDISH`
- * * `VIETNAMESE`
- * * `TURKISH`
- * * `CZECH`
- * * `GREEK`
- * * `BULGARIAN`
- * * `RUSSIAN`
- * * `UKRAINIAN`
- * * `HINDI`
- * * `THAI`
- * * `CHINA_CHINESE`
- * * `JAPANESE`
- * * `TAIWAN_CHINESE`
- * * `KOREAN`
- * @typedef {Object<string, string>} localeSetting
- * @see {@link https://discord.com/developers/docs/reference#locales}
- */
-exports.localeSetting = {
-  da: 'DANISH',
-  de: 'GERMAN',
-  'en-GB': 'ENGLISH_UK',
-  'en-US': 'ENGLISH_US',
-  'es-ES': 'SPANISH',
-  fr: 'FRENCH',
-  hr: 'CROATIAN',
-  it: 'ITALIAN',
-  lt: 'LITHUANIAN',
-  hu: 'HUNGARIAN',
-  nl: 'DUTCH',
-  no: 'NORWEGIAN',
-  pl: 'POLISH',
-  'pt-BR': 'BRAZILIAN_PORTUGUESE',
-  ro: 'ROMANIA_ROMANIAN',
-  fi: 'FINNISH',
-  'sv-SE': 'SWEDISH',
-  vi: 'VIETNAMESE',
-  tr: 'TURKISH',
-  cs: 'CZECH',
-  el: 'GREEK',
-  bg: 'BULGARIAN',
-  ru: 'RUSSIAN',
-  uk: 'UKRAINIAN',
-  hi: 'HINDI',
-  th: 'THAI',
-  'zh-CN': 'CHINA_CHINESE',
-  ja: 'JAPANESE',
-  'zh-TW': 'TAIWAN_CHINESE',
-  ko: 'KOREAN',
-};
+exports.ciphers = [
+  'TLS_AES_128_GCM_SHA256',
+  'TLS_AES_256_GCM_SHA384',
+  'TLS_CHACHA20_POLY1305_SHA256',
+  'ECDHE-ECDSA-AES128-GCM-SHA256',
+  'ECDHE-RSA-AES128-GCM-SHA256',
+  'ECDHE-ECDSA-AES256-GCM-SHA384',
+  'ECDHE-RSA-AES256-GCM-SHA384',
+  'ECDHE-ECDSA-CHACHA20-POLY1305',
+  'ECDHE-RSA-CHACHA20-POLY1305',
+  'ECDHE-RSA-AES128-SHA',
+  'ECDHE-RSA-AES256-SHA',
+  'AES128-GCM-SHA256',
+  'AES256-GCM-SHA384',
+  'AES128-SHA',
+  'AES256-SHA',
+];
 
 /**
  * The types of WebSocket error codes:
@@ -191,8 +96,9 @@ exports.Endpoints = {
         if (dynamic && hash.startsWith('a_')) format = 'gif';
         return makeImageUrl(`${root}/avatars/${userId}/${hash}`, { format, size });
       },
-      AvatarDecoration: (userId, hash, format = 'png', size) =>
-        makeImageUrl(`${root}/avatar-decorations/${userId}/${hash}`, { format, size }),
+      AvatarDecoration: (hash, size) =>
+        makeImageUrl(`${root}/avatar-decoration-presets/${hash}`, { format: 'png', size }),
+      ClanBadge: (guildId, hash) => `${root}/clan-badges/${guildId}/${hash}.png`,
       GuildMemberAvatar: (guildId, memberId, hash, format = 'webp', size, dynamic = false) => {
         if (dynamic && hash.startsWith('a_')) format = 'gif';
         return makeImageUrl(`${root}/guilds/${guildId}/users/${memberId}/avatars/${hash}`, { format, size });
@@ -225,16 +131,13 @@ exports.Endpoints = {
         }`,
       RoleIcon: (roleId, hash, format = 'webp', size) =>
         makeImageUrl(`${root}/role-icons/${roleId}/${hash}`, { size, format }),
-      guildScheduledEventCover: (scheduledEventId, coverHash, format, size) =>
+      GuildScheduledEventCover: (scheduledEventId, coverHash, format, size) =>
         makeImageUrl(`${root}/guild-events/${scheduledEventId}/${coverHash}`, { size, format }),
-      // Test only
-      BadgeIcon: hash => makeImageUrl(`${root}/badge-icons/${hash}`, { format: 'png' }),
     };
   },
   invite: (root, code, eventId) => (eventId ? `${root}/${code}?event=${eventId}` : `${root}/${code}`),
   scheduledEvent: (root, guildId, eventId) => `${root}/${guildId}/${eventId}`,
-  botGateway: '/gateway/bot',
-  userGateway: '/gateway',
+  botGateway: '/gateway',
 };
 
 /**
@@ -260,6 +163,23 @@ exports.Status = {
   WAITING_FOR_GUILDS: 6,
   IDENTIFYING: 7,
   RESUMING: 8,
+};
+
+/**
+ * The current status of a voice connection. Here are the available statuses:
+ * * CONNECTED: 0
+ * * CONNECTING: 1
+ * * AUTHENTICATING: 2
+ * * RECONNECTING: 3
+ * * DISCONNECTED: 4
+ * @typedef {number} VoiceStatus
+ */
+exports.VoiceStatus = {
+  CONNECTED: 0,
+  CONNECTING: 1,
+  AUTHENTICATING: 2,
+  RECONNECTING: 3,
+  DISCONNECTED: 4,
 };
 
 /**
@@ -298,8 +218,10 @@ exports.Status = {
  * * REQUEST_SOUNDBOARD_SOUNDS: 31
  * * SPEED_TEST_CREATE: 32 => Create a voice speed test.
  * * SPEED_TEST_DELETE: 33 => Delete a voice speed test.
- * * REQUEST_LAST_MESSAGES: 34 => 	Request last messages for a guild's channels.
+ * * REQUEST_LAST_MESSAGES: 34 => Request last messages for a guild's channels.
  * * SEARCH_RECENT_MEMBERS: 35 => ~ Opcode 8 (Member Safety)
+ * * REQUEST_CHANNEL_STATUSES: 36 => Request Voice Channel status.
+ * * GUILD_SUBSCRIPTIONS_BULK: 37 => ~ Opcode 14
  * @typedef {Object<string, number>} Opcodes
  */
 exports.Opcodes = {
@@ -338,7 +260,31 @@ exports.Opcodes = {
   SPEED_TEST_DELETE: 33, // Payload: null
   REQUEST_LAST_MESSAGES: 34, // Payload: { guild_id: string, channel_ids: string[] }
   SEARCH_RECENT_MEMBERS: 35, // Payload: { guild_id: string, query: string, continuation_token?: Snowflake }
-  // Update: 17/7/2023
+  REQUEST_CHANNEL_STATUSES: 36, // Payload: { guild_id: string } | Response: CHANNEL_STATUSES | { guild_id, channels: { status, id }[] }
+  GUILD_SUBSCRIPTIONS_BULK: 37, // Payload: { subscriptions: Object<guild_id, { Payload_op14 - guild_id }> } | Response: Opcode 14
+  // Updated: 23/1/2024
+};
+
+/**
+ * @typedef {Opject<string, number>} VoiceOpcodes
+ */
+exports.VoiceOpcodes = {
+  IDENTIFY: 0,
+  SELECT_PROTOCOL: 1,
+  READY: 2,
+  HEARTBEAT: 3,
+  SESSION_DESCRIPTION: 4,
+  SPEAKING: 5,
+  HEARTBEAT_ACK: 6,
+  RESUME: 7,
+  HELLO: 8,
+  RESUMED: 9,
+  SOURCES: 12,
+  CLIENT_DISCONNECT: 13,
+  SESSION_UPDATE: 14,
+  MEDIA_SINK_WANTS: 15,
+  VOICE_BACKEND_VERSION: 16,
+  CHANNEL_OPTIONS_UPDATE: 17,
 };
 
 /**
@@ -348,7 +294,6 @@ exports.Opcodes = {
  * * API_RESPONSE: apiResponse
  * * API_REQUEST: apiRequest
  * * CLIENT_READY: ready
- * * APPLICATION_COMMAND_AUTOCOMPLETE_RESPONSE: applicationCommandAutocompleteResponse
  * * APPLICATION_COMMAND_CREATE: applicationCommandCreate (deprecated)
  * * APPLICATION_COMMAND_DELETE: applicationCommandDelete (deprecated)
  * * APPLICATION_COMMAND_UPDATE: applicationCommandUpdate (deprecated)
@@ -357,9 +302,7 @@ exports.Opcodes = {
  * * AUTO_MODERATION_RULE_CREATE: autoModerationRuleCreate
  * * AUTO_MODERATION_RULE_DELETE: autoModerationRuleDelete
  * * AUTO_MODERATION_RULE_UPDATE: autoModerationRuleUpdate
- * * CALL_CREATE: callCreate
- * * CALL_DELETE: callDelete
- * * CALL_UPDATE: callUpdate
+ * * GUILD_AVAILABLE: guildAvailable
  * * GUILD_CREATE: guildCreate
  * * GUILD_DELETE: guildDelete
  * * GUILD_UPDATE: guildUpdate
@@ -384,9 +327,6 @@ exports.Opcodes = {
  * * CHANNEL_DELETE: channelDelete
  * * CHANNEL_UPDATE: channelUpdate
  * * CHANNEL_PINS_UPDATE: channelPinsUpdate
- * * CHANNEL_RECIPIENT_REMOVE: channelRecipientRemove
- * * CHANNEL_RECIPIENT_ADD: channelRecipientAdd
- * * MESSAGE_ACK: messageAck
  * * MESSAGE_CREATE: messageCreate
  * * MESSAGE_DELETE: messageDelete
  * * MESSAGE_UPDATE: messageUpdate
@@ -407,7 +347,6 @@ exports.Opcodes = {
  * * VOICE_STATE_UPDATE: voiceStateUpdate
  * * TYPING_START: typingStart
  * * WEBHOOKS_UPDATE: webhookUpdate
- * * INTERACTION_CREATE: interactionCreate
  * * ERROR: error
  * * WARN: warn
  * * DEBUG: debug
@@ -431,6 +370,17 @@ exports.Opcodes = {
  * * GUILD_SCHEDULED_EVENT_USER_ADD: guildScheduledEventUserAdd
  * * GUILD_SCHEDULED_EVENT_USER_REMOVE: guildScheduledEventUserRemove
  * * GUILD_AUDIT_LOG_ENTRY_CREATE: guildAuditLogEntryCreate
+ * * UNHANDLED_PACKET: unhandledPacket
+ * * RELATIONSHIP_ADD: relationshipAdd
+ * * RELATIONSHIP_REMOVE: relationshipRemove
+ * * RELATIONSHIP_UPDATE: relationshipUpdate
+ * * CHANNEL_RECIPIENT_ADD: channelRecipientAdd
+ * * CHANNEL_RECIPIENT_REMOVE: channelRecipientRemove
+ * * INTERACTION_MODAL_CREATE: interactionModalCreate
+ * * CALL_CREATE: callCreate
+ * * CALL_UPDATE: callUpdate
+ * * CALL_DELETE: callDelete
+ * * VOICE_CHANNEL_EFFECT_SEND: voiceChannelEffectSend
  * @typedef {Object<string, string>} Events
  */
 exports.Events = {
@@ -439,7 +389,6 @@ exports.Events = {
   API_RESPONSE: 'apiResponse',
   API_REQUEST: 'apiRequest',
   CLIENT_READY: 'ready',
-  APPLICATION_COMMAND_AUTOCOMPLETE_RESPONSE: 'applicationCommandAutocompleteResponse',
   APPLICATION_COMMAND_CREATE: 'applicationCommandCreate',
   APPLICATION_COMMAND_DELETE: 'applicationCommandDelete',
   APPLICATION_COMMAND_UPDATE: 'applicationCommandUpdate',
@@ -448,20 +397,16 @@ exports.Events = {
   AUTO_MODERATION_RULE_CREATE: 'autoModerationRuleCreate',
   AUTO_MODERATION_RULE_DELETE: 'autoModerationRuleDelete',
   AUTO_MODERATION_RULE_UPDATE: 'autoModerationRuleUpdate',
-  CALL_CREATE: 'callCreate',
-  CALL_DELETE: 'callDelete',
-  CALL_UPDATE: 'callUpdate',
+  GUILD_AVAILABLE: 'guildAvailable',
   GUILD_CREATE: 'guildCreate',
   GUILD_DELETE: 'guildDelete',
   GUILD_UPDATE: 'guildUpdate',
-  GUILD_APPLICATION_COMMANDS_UPDATE: 'guildApplicationCommandUpdate',
   GUILD_UNAVAILABLE: 'guildUnavailable',
   GUILD_MEMBER_ADD: 'guildMemberAdd',
   GUILD_MEMBER_REMOVE: 'guildMemberRemove',
   GUILD_MEMBER_UPDATE: 'guildMemberUpdate',
   GUILD_MEMBER_AVAILABLE: 'guildMemberAvailable',
   GUILD_MEMBERS_CHUNK: 'guildMembersChunk',
-  GUILD_MEMBER_LIST_UPDATE: 'guildMemberListUpdate',
   GUILD_INTEGRATIONS_UPDATE: 'guildIntegrationsUpdate',
   GUILD_ROLE_CREATE: 'roleCreate',
   GUILD_ROLE_DELETE: 'roleDelete',
@@ -477,9 +422,6 @@ exports.Events = {
   CHANNEL_DELETE: 'channelDelete',
   CHANNEL_UPDATE: 'channelUpdate',
   CHANNEL_PINS_UPDATE: 'channelPinsUpdate',
-  CHANNEL_RECIPIENT_REMOVE: 'channelRecipientRemove',
-  CHANNEL_RECIPIENT_ADD: 'channelRecipientAdd',
-  MESSAGE_ACK: 'messageAck',
   MESSAGE_CREATE: 'messageCreate',
   MESSAGE_DELETE: 'messageDelete',
   MESSAGE_UPDATE: 'messageUpdate',
@@ -495,17 +437,11 @@ exports.Events = {
   THREAD_MEMBER_UPDATE: 'threadMemberUpdate',
   THREAD_MEMBERS_UPDATE: 'threadMembersUpdate',
   USER_UPDATE: 'userUpdate',
-  USER_SETTINGS_UPDATE: 'userSettingsUpdate',
-  USER_GUILD_SETTINGS_UPDATE: 'userGuildSettingsUpdate',
   PRESENCE_UPDATE: 'presenceUpdate',
   VOICE_SERVER_UPDATE: 'voiceServerUpdate',
   VOICE_STATE_UPDATE: 'voiceStateUpdate',
   TYPING_START: 'typingStart',
   WEBHOOKS_UPDATE: 'webhookUpdate',
-  INTERACTION_CREATE: 'interactionCreate',
-  INTERACTION_SUCCESS: 'interactionSuccess',
-  INTERACTION_FAILURE: 'interactionFailure',
-  INTERACTION_MODAL_CREATE: 'interactionModalCreate',
   ERROR: 'error',
   WARN: 'warn',
   DEBUG: 'debug',
@@ -529,18 +465,22 @@ exports.Events = {
   GUILD_SCHEDULED_EVENT_USER_ADD: 'guildScheduledEventUserAdd',
   GUILD_SCHEDULED_EVENT_USER_REMOVE: 'guildScheduledEventUserRemove',
   GUILD_AUDIT_LOG_ENTRY_CREATE: 'guildAuditLogEntryCreate',
-  RELATIONSHIP_ADD: 'relationshipAdd',
-  RELATIONSHIP_REMOVE: 'relationshipRemove',
-  RELATIONSHIP_UPDATE: 'relationshipUpdate',
   UNHANDLED_PACKET: 'unhandledPacket',
-  CAPTCHA_REQUIRED: 'captchaRequired',
-  // ! TODO: Add more events
-  SOUNDBOARD_SOUNDS: 'soundboardSounds',
+  RELATIONSHIP_ADD: 'relationshipAdd',
+  RELATIONSHIP_UPDATE: 'relationshipUpdate',
+  RELATIONSHIP_REMOVE: 'relationshipRemove',
+  CHANNEL_RECIPIENT_ADD: 'channelRecipientAdd',
+  CHANNEL_RECIPIENT_REMOVE: 'channelRecipientRemove',
+  INTERACTION_MODAL_CREATE: 'interactionModalCreate',
+  CALL_CREATE: 'callCreate',
+  CALL_UPDATE: 'callUpdate',
+  CALL_DELETE: 'callDelete',
+  MESSAGE_POLL_VOTE_ADD: 'messagePollVoteAdd',
+  MESSAGE_POLL_VOTE_REMOVE: 'messagePollVoteRemove',
   VOICE_CHANNEL_EFFECT_SEND: 'voiceChannelEffectSend',
-  GUILD_SOUNDBOARD_SOUND_CREATE: 'guildSoundboardSoundCreate',
-  GUILD_SOUNDBOARD_SOUND_UPDATE: 'guildSoundboardSoundUpdate',
-  GUILD_SOUNDBOARD_SOUNDS_UPDATE: 'guildSoundboardSoundsUpdate',
-  GUILD_SOUNDBOARD_SOUND_DELETE: 'guildSoundboardSoundDelete',
+  // Djs v12
+  VOICE_BROADCAST_SUBSCRIBE: 'subscribe',
+  VOICE_BROADCAST_UNSUBSCRIBE: 'unsubscribe',
 };
 
 /**
@@ -580,11 +520,10 @@ exports.PartialTypes = keyMirror(['USER', 'CHANNEL', 'GUILD_MEMBER', 'MESSAGE', 
  * The type of a WebSocket message event, e.g. `MESSAGE_CREATE`. Here are the available events:
  * * READY
  * * RESUMED
- * * APPLICATION_COMMAND_AUTOCOMPLETE_RESPONSE
  * * APPLICATION_COMMAND_CREATE (deprecated)
  * * APPLICATION_COMMAND_DELETE (deprecated)
- * * APPLICATION_COMMAND_UPDATE (deprecated)
  * * APPLICATION_COMMAND_PERMISSIONS_UPDATE
+ * * APPLICATION_COMMAND_UPDATE (deprecated)
  * * AUTO_MODERATION_ACTION_EXECUTION
  * * AUTO_MODERATION_RULE_CREATE
  * * AUTO_MODERATION_RULE_DELETE
@@ -629,7 +568,6 @@ exports.PartialTypes = keyMirror(['USER', 'CHANNEL', 'GUILD_MEMBER', 'MESSAGE', 
  * * VOICE_STATE_UPDATE
  * * VOICE_SERVER_UPDATE
  * * WEBHOOKS_UPDATE
- * * INTERACTION_CREATE
  * * STAGE_INSTANCE_CREATE
  * * STAGE_INSTANCE_UPDATE
  * * STAGE_INSTANCE_DELETE
@@ -646,7 +584,6 @@ exports.PartialTypes = keyMirror(['USER', 'CHANNEL', 'GUILD_MEMBER', 'MESSAGE', 
 exports.WSEvents = keyMirror([
   'READY',
   'RESUMED',
-  'APPLICATION_COMMAND_AUTOCOMPLETE_RESPONSE',
   'APPLICATION_COMMAND_CREATE',
   'APPLICATION_COMMAND_DELETE',
   'APPLICATION_COMMAND_UPDATE',
@@ -695,7 +632,6 @@ exports.WSEvents = keyMirror([
   'VOICE_STATE_UPDATE',
   'VOICE_SERVER_UPDATE',
   'WEBHOOKS_UPDATE',
-  'INTERACTION_CREATE',
   'STAGE_INSTANCE_CREATE',
   'STAGE_INSTANCE_UPDATE',
   'STAGE_INSTANCE_DELETE',
@@ -723,6 +659,7 @@ exports.WSEvents = keyMirror([
  * * `guilds.join`: allows the bot to join the user to any guild it is in using Guild#addMember
  * * `gdm.join`: allows joining the user to a group dm
  * * `webhook.incoming`: generates a webhook to a channel
+ * * `role_connections.write`: allows your app to update a user's connection and metadata for the app
  * @typedef {string} InviteScope
  * @see {@link https://discord.com/developers/docs/topics/oauth2#shared-resources-oauth2-scopes}
  */
@@ -739,6 +676,7 @@ exports.InviteScopes = [
   'guilds.join',
   'gdm.join',
   'webhook.incoming',
+  'role_connections.write',
 ];
 
 // TODO: change Integration#expireBehavior to this and clean up Integration
@@ -778,11 +716,31 @@ exports.IntegrationExpireBehaviors = createEnum(['REMOVE_ROLE', 'KICK']);
  * * CONTEXT_MENU_COMMAND
  * * AUTO_MODERATION_ACTION
  * * ROLE_SUBSCRIPTION_PURCHASE
+ * * INTERACTION_PREMIUM_UPSELL
+ * * STAGE_START
+ * * STAGE_END
+ * * STAGE_SPEAKER
+ * * STAGE_RAISE_HAND
+ * * STAGE_TOPIC
+ * * GUILD_APPLICATION_PREMIUM_SUBSCRIPTION
+ * * PREMIUM_REFERRAL
+ * * GUILD_INCIDENT_ALERT_MODE_ENABLED
+ * * GUILD_INCIDENT_ALERT_MODE_DISABLED
+ * * GUILD_INCIDENT_REPORT_RAID
+ * * GUILD_INCIDENT_REPORT_FALSE_ALARM
+ * * GUILD_DEADCHAT_REVIVE_PROMPT
+ * * CUSTOM_GIFT
+ * * GUILD_GAMING_STATS_PROMPT
+ * * PURCHASE_NOTIFICATION
+ * * POLL_RESULT
+ * * CHANGELOG
+ * * NITRO_NOTIFICATION
  * @typedef {string} MessageType
  * @see {@link https://discord.com/developers/docs/resources/channel#message-object-message-types}
+ * @see {@link https://docs.discord.sex/resources/message#message-type}
  */
 exports.MessageTypes = [
-  'DEFAULT',
+  'DEFAULT', // 0
   'RECIPIENT_ADD',
   'RECIPIENT_REMOVE',
   'CALL',
@@ -795,7 +753,7 @@ exports.MessageTypes = [
   'USER_PREMIUM_GUILD_SUBSCRIPTION_TIER_2',
   'USER_PREMIUM_GUILD_SUBSCRIPTION_TIER_3',
   'CHANNEL_FOLLOW_ADD',
-  null,
+  null, // 13
   'GUILD_DISCOVERY_DISQUALIFIED',
   'GUILD_DISCOVERY_REQUALIFIED',
   'GUILD_DISCOVERY_GRACE_PERIOD_INITIAL_WARNING',
@@ -808,6 +766,41 @@ exports.MessageTypes = [
   'CONTEXT_MENU_COMMAND',
   'AUTO_MODERATION_ACTION',
   'ROLE_SUBSCRIPTION_PURCHASE',
+  'INTERACTION_PREMIUM_UPSELL',
+  'STAGE_START',
+  'STAGE_END',
+  'STAGE_SPEAKER',
+  'STAGE_RAISE_HAND',
+  'STAGE_TOPIC',
+  'GUILD_APPLICATION_PREMIUM_SUBSCRIPTION',
+  null, // 33
+  null,
+  'PREMIUM_REFERRAL',
+  'GUILD_INCIDENT_ALERT_MODE_ENABLED',
+  'GUILD_INCIDENT_ALERT_MODE_DISABLED',
+  'GUILD_INCIDENT_REPORT_RAID',
+  'GUILD_INCIDENT_REPORT_FALSE_ALARM',
+  'GUILD_DEADCHAT_REVIVE_PROMPT',
+  'CUSTOM_GIFT',
+  'GUILD_GAMING_STATS_PROMPT',
+  null,
+  'PURCHASE_NOTIFICATION',
+  null,
+  'POLL_RESULT',
+  'CHANGELOG',
+  'NITRO_NOTIFICATION',
+];
+
+/**
+ * The type of a message reference, e.g. `DEFAULT`. Here are the available types:
+ * * DEFAULT
+ * * FORWARD
+ * @typedef {string} MessageReferenceType
+ * @see {@link https://discord.com/developers/docs/resources/message#message-reference-types}
+ */
+exports.MessageReferenceTypes = [
+  'DEFAULT', // 0
+  'FORWARD',
 ];
 
 /**
@@ -868,10 +861,11 @@ exports.SystemMessageTypes = exports.MessageTypes.filter(
  * * WATCHING
  * * CUSTOM
  * * COMPETING
+ * * HANG
  * @typedef {string} ActivityType
  * @see {@link https://discord.com/developers/docs/game-sdk/activities#data-models-activitytype-enum}
  */
-exports.ActivityTypes = createEnum(['PLAYING', 'STREAMING', 'LISTENING', 'WATCHING', 'CUSTOM', 'COMPETING']);
+exports.ActivityTypes = createEnum(['PLAYING', 'STREAMING', 'LISTENING', 'WATCHING', 'CUSTOM', 'COMPETING', 'HANG']);
 
 /**
  * All available channel types:
@@ -890,7 +884,8 @@ exports.ActivityTypes = createEnum(['PLAYING', 'STREAMING', 'LISTENING', 'WATCHI
  * * `GUILD_PRIVATE_THREAD` - a guild text channel's private thread channel
  * * `GUILD_STAGE_VOICE` - a guild stage voice channel
  * * `GUILD_DIRECTORY` - the channel in a hub containing guilds
- * * `GUILD_FORUM` - a guild channel that only contains threads
+ * * `GUILD_FORUM` - a channel that can only contain threads
+ * * `GUILD_MEDIA` - a channel that can only contain threads, similar to `GUILD_FORUM` channels
  * * `UNKNOWN` - a generic channel of unknown type, could be Channel or GuildChannel
  * @typedef {string} ChannelType
  * @see {@link https://discord.com/developers/docs/resources/channel#channel-object-channel-types}
@@ -911,6 +906,7 @@ exports.ChannelTypes = createEnum([
   'GUILD_STAGE_VOICE',
   'GUILD_DIRECTORY',
   'GUILD_FORUM',
+  'GUILD_MEDIA',
 ]);
 
 /**
@@ -1129,7 +1125,6 @@ exports.VerificationLevels = createEnum(['NONE', 'LOW', 'MEDIUM', 'HIGH', 'VERY_
  * * MAXIMUM_PINS
  * * MAXIMUM_RECIPIENTS
  * * MAXIMUM_ROLES
- * * MAXIMUM_USERNAMES
  * * MAXIMUM_WEBHOOKS
  * * MAXIMUM_EMOJIS
  * * MAXIMUM_REACTIONS
@@ -1186,7 +1181,6 @@ exports.VerificationLevels = createEnum(['NONE', 'LOW', 'MEDIUM', 'HIGH', 'VERY_
  * * INVALID_API_VERSION
  * * FILE_UPLOADED_EXCEEDS_MAXIMUM_SIZE
  * * INVALID_FILE_UPLOADED
- * * GIFT_CODE_CLAIMED
  * * CANNOT_SELF_REDEEM_GIFT
  * * INVALID_GUILD
  * * INVALID_MESSAGE_TYPE
@@ -1201,7 +1195,6 @@ exports.VerificationLevels = createEnum(['NONE', 'LOW', 'MEDIUM', 'HIGH', 'VERY_
  * * INSUFFICIENT_BOOSTS
  * * INVALID_JSON
  * * TWO_FACTOR_REQUIRED
- * * INVALID_TWO_FACTOR_CODE
  * * NO_USERS_WITH_DISCORDTAG_EXIST
  * * REACTION_BLOCKED
  * * RESOURCE_OVERLOADED
@@ -1267,27 +1260,20 @@ exports.APIErrors = {
   UNKNOWN_GUILD_SCHEDULED_EVENT_USER: 10071,
   BOT_PROHIBITED_ENDPOINT: 20001,
   BOT_ONLY_ENDPOINT: 20002,
-  RPC_PROXY_DISALLOWED: 20003,
   CANNOT_SEND_EXPLICIT_CONTENT: 20009,
-  ACCOUNT_SCHEDULED_FOR_DELETION: 20011,
   NOT_AUTHORIZED: 20012,
-  ACCOUNT_DISABLED: 20013,
   SLOWMODE_RATE_LIMIT: 20016,
   ACCOUNT_OWNER_ONLY: 20018,
   ANNOUNCEMENT_EDIT_LIMIT_EXCEEDED: 20022,
-  UNDER_MINIMUM_AGE: 20024,
-  QUARANTINED: 20026,
   CHANNEL_HIT_WRITE_RATELIMIT: 20028,
   SERVER_HIT_WRITE_RATELIMIT: 20029,
   CONTENT_NOT_ALLOWED: 20031,
   GUILD_PREMIUM_LEVEL_TOO_LOW: 20035,
-  VANITY_URL_REQUIRED_FOR_PUBLISHED_GUILDS: 20040,
   MAXIMUM_GUILDS: 30001,
   MAXIMUM_FRIENDS: 30002,
   MAXIMUM_PINS: 30003,
   MAXIMUM_RECIPIENTS: 30004,
   MAXIMUM_ROLES: 30005,
-  MAXIMUN_USERNAMES: 30006,
   MAXIMUM_WEBHOOKS: 30007,
   MAXIMUM_EMOJIS: 30008,
   MAXIMUM_REACTIONS: 30010,
@@ -1296,7 +1282,6 @@ exports.APIErrors = {
   MAXIMUM_INVITES: 30016,
   MAXIMUM_ANIMATED_EMOJIS: 30018,
   MAXIMUM_SERVER_MEMBERS: 30019,
-  NOT_ENOUGH_GUILD_MEMBERS: 30029,
   MAXIMUM_NUMBER_OF_SERVER_CATEGORIES: 30030,
   GUILD_ALREADY_HAS_TEMPLATE: 30031,
   MAXIMUM_THREAD_PARTICIPANTS: 30033,
@@ -1310,16 +1295,11 @@ exports.APIErrors = {
   UNAUTHORIZED: 40001,
   ACCOUNT_VERIFICATION_REQUIRED: 40002,
   DIRECT_MESSAGES_TOO_FAST: 40003,
-  SEND_MESSAGE_TEMPORARILY_DISABLED: 40004,
   REQUEST_ENTITY_TOO_LARGE: 40005,
   FEATURE_TEMPORARILY_DISABLED: 40006,
   USER_BANNED: 40007,
-  CONNECTION_REVOKED: 40012,
-  DELETE_ACCOUNT_TRANSFER_TEAM_OWNERSHIP: 40028,
   TARGET_USER_NOT_CONNECTED_TO_VOICE: 40032,
   ALREADY_CROSSPOSTED: 40033,
-  TAG_REQUIRED: 40067,
-  INVITES_DISABLED: 40069,
   MISSING_ACCESS: 50001,
   INVALID_ACCOUNT_TYPE: 50002,
   CANNOT_EXECUTE_ON_DM: 50003,
@@ -1336,13 +1316,9 @@ exports.APIErrors = {
   INVALID_AUTHENTICATION_TOKEN: 50014,
   NOTE_TOO_LONG: 50015,
   INVALID_BULK_DELETE_QUANTITY: 50016,
-  INVALID_MFA_LEVEL: 50017,
-  INVALID_PASSWORD: 50018,
   CANNOT_PIN_MESSAGE_IN_OTHER_CHANNEL: 50019,
   INVALID_OR_TAKEN_INVITE_CODE: 50020,
   CANNOT_EXECUTE_ON_SYSTEM_MESSAGE: 50021,
-  INVALID_PHONE_NUMBER: 50022,
-  INVALID_CLIENT_ID: 50023,
   CANNOT_EXECUTE_ON_CHANNEL_TYPE: 50024,
   INVALID_OAUTH_TOKEN: 50025,
   MISSING_OAUTH_SCOPE: 50026,
@@ -1355,8 +1331,6 @@ exports.APIErrors = {
   INVALID_API_VERSION: 50041,
   FILE_UPLOADED_EXCEEDS_MAXIMUM_SIZE: 50045,
   INVALID_FILE_UPLOADED: 50046,
-  GIFT_CODE_CLAIMED: 50050,
-  INVALID_GIFT_REDEMPTION_OWNED: 50051,
   CANNOT_SELF_REDEEM_GIFT: 50054,
   INVALID_GUILD: 50055,
   INVALID_MESSAGE_TYPE: 50068,
@@ -1367,15 +1341,9 @@ exports.APIErrors = {
   INVALID_THREAD_NOTIFICATION_SETTINGS: 50084,
   PARAMETER_EARLIER_THAN_CREATION: 50085,
   GUILD_NOT_AVAILABLE_IN_LOCATION: 50095,
-  INVALID_CANNOT_FRIEND_SELF: 50096,
   GUILD_MONETIZATION_REQUIRED: 50097,
   INSUFFICIENT_BOOSTS: 50101,
-  INVALID_USER_SETTINGS_DATA: 50105,
-  INVALID_ACTIVITY_LAUNCH_NO_ACCESS: 50106,
-  INVALID_ACTIVITY_LAUNCH_PREMIUM_TIER: 50107,
-  INVALID_ACTIVITY_LAUNCH_CONCURRENT_ACTIVITIES: 50108,
   INVALID_JSON: 50109,
-  INVALID_FILE_ASSET_SIZE_RESIZE_GIF: 50138,
   CANNOT_MIX_SUBSCRIPTION_AND_NON_SUBSCRIPTION_ROLES_FOR_EMOJI: 50144,
   CANNOT_CONVERT_PREMIUM_EMOJI_TO_NORMAL_EMOJI: 50145,
   VOICE_MESSAGES_DO_NOT_SUPPORT_ADDITIONAL_CONTENT: 50159,
@@ -1383,30 +1351,9 @@ exports.APIErrors = {
   VOICE_MESSAGES_MUST_HAVE_SUPPORTING_METADATA: 50161,
   VOICE_MESSAGES_CANNOT_BE_EDITED: 50162,
   YOU_CANNOT_SEND_VOICE_MESSAGES_IN_THIS_CHANNEL: 50173,
-  TWO_FACTOR_ENABLED: 60001,
-  TWO_FACTOR_DISABLED: 60002,
   TWO_FACTOR_REQUIRED: 60003,
-  TWO_FACTOR_UNVERIFIED: 60004,
-  TWO_FACTOR_INVALID_SECRET: 60005,
-  TWO_FACTOR_INVALID_TICKET: 60006,
-  INVALID_TWO_FACTOR_CODE: 60008,
-  TWO_FACTOR_INVALID_SESSION: 60009,
-  PHONE_NUMBER_UNABLE_TO_SEND: 70003,
-  PHONE_VERIFICATION_REQUIRED: 70007,
-  RELATIONSHIP_INCOMING_DISABLED: 80000,
-  RELATIONSHIP_INCOMING_BLOCKED: 80001,
-  RELATIONSHIP_INVALUD_USER_BOT: 80002,
-  RELATIONSHIP_INVALID_SELF: 80003,
   NO_USERS_WITH_DISCORDTAG_EXIST: 80004,
-  RELATIONSHIP_ALREADY_FRIENDS: 80007,
   REACTION_BLOCKED: 90001,
-  INVALID_GIFT_REDEMPTION_SUBSCRIPTION_MANAGED: 100021,
-  INVALID_GIFT_REDEMPTION_SUBSCRIPTION_INCOMPATIBLE: 100023,
-  INVALID_GIFT_REDEMPTION_INVOICE_OPEN: 100024,
-  BILLING_NON_REFUNDABLE_PAYMENT_SOURCE: 100060,
-  LISTING_ALREADY_JOINED: 120000,
-  LISTING_TOO_MANY_MEMBERS: 120001,
-  LISTING_JOIN_BLOCKED: 120002,
   RESOURCE_OVERLOADED: 130000,
   STAGE_ALREADY_OPEN: 150006,
   CANNOT_REPLY_WITHOUT_READ_MESSAGE_HISTORY_PERMISSION: 160002,
@@ -1421,12 +1368,8 @@ exports.APIErrors = {
   LOTTIE_ANIMATION_MAXIMUM_DIMENSIONS_EXCEEDED: 170005,
   STICKER_FRAME_RATE_IS_TOO_SMALL_OR_TOO_LARGE: 170006,
   STICKER_ANIMATION_DURATION_EXCEEDS_MAXIMUM_OF_5_SECONDS: 170007,
-  POGGERMODE_TEMPORARILY_DISABLED: 170008,
   CANNOT_UPDATE_A_FINISHED_EVENT: 180000,
   FAILED_TO_CREATE_STAGE_NEEDED_FOR_STAGE_EVENT: 180002,
-  AUTOMOD_MESSAGE_BLOCKED: 200000,
-  AUTOMOD_TITLE_BLOCKED: 200001,
-  HARMFUL_LINK_MESSAGE_BLOCKED: 240000,
 };
 
 /**
@@ -1552,7 +1495,7 @@ exports.ApplicationCommandPermissionTypes = createEnum([null, 'ROLE', 'USER']);
  * * BOOLEAN_EQUAL
  * * BOOLEAN_NOT_EQUAL
  * @typedef {string} ApplicationRoleConnectionMetadataType
- * @see {@link https://discord.com/developers/docs/resources/application-role-connection-metadata#application-role-connection-metadata-object-application-role-connection-metadata-type}
+ * @see{@link https://discord.com/developers/docs/resources/application-role-connection-metadata#application-role-connection-metadata-object-application-role-connection-metadata-type}
  */
 exports.ApplicationRoleConnectionMetadataTypes = createEnum([
   null,
@@ -1605,7 +1548,6 @@ exports.AutoModerationActionTypes = createEnum([null, 'BLOCK_MESSAGE', 'SEND_ALE
  */
 
 exports.AutoModerationRuleEventTypes = createEnum([null, 'MESSAGE_SEND']);
-
 /**
  * The type of an {@link Interaction} object:
  * * PING
@@ -1654,37 +1596,29 @@ exports.InteractionResponseTypes = createEnum([
  * The type of a message component
  * * ACTION_ROW
  * * BUTTON
- * * TEXT_INPUT
  * * STRING_SELECT
+ * * TEXT_INPUT
  * * USER_SELECT
  * * ROLE_SELECT
  * * MENTIONABLE_SELECT
  * * CHANNEL_SELECT
- * * SELECT_MENU (deprecated)
  * @typedef {string} MessageComponentType
  * @see {@link https://discord.com/developers/docs/interactions/message-components#component-object-component-types}
  */
-exports.MessageComponentTypes = {
-  ...createEnum([
-    null,
-    'ACTION_ROW',
-    'BUTTON',
-    'STRING_SELECT',
-    'TEXT_INPUT',
-    'USER_SELECT',
-    'ROLE_SELECT',
-    'MENTIONABLE_SELECT',
-    'CHANNEL_SELECT',
-  ]),
-  /** @deprecated Use `STRING_SELECT` instead */
-  SELECT_MENU: 3,
-  /** @deprecated Use `STRING_SELECT` instead */
-  3: 'SELECT_MENU',
-};
+exports.MessageComponentTypes = createEnum([
+  null,
+  'ACTION_ROW',
+  'BUTTON',
+  'STRING_SELECT',
+  'TEXT_INPUT',
+  'USER_SELECT',
+  'ROLE_SELECT',
+  'MENTIONABLE_SELECT',
+  'CHANNEL_SELECT',
+]);
 
 /**
  * The types of components that are select menus. The available types are:
- * * SELECT_MENU (deprecated)
  * * STRING_MENU
  * * USER_SELECT
  * * ROLE_SELECT
@@ -1693,19 +1627,15 @@ exports.MessageComponentTypes = {
  * @typedef {string} SelectMenuComponentType
  * @see {@link https://discord.com/developers/docs/interactions/message-components#component-object-component-types}
  */
-exports.SelectMenuComponentTypes = {
-  ...createEnum([
-    ...new Array(3).fill(null),
-    'STRING_MENU',
-    null,
-    'USER_SELECT',
-    'ROLE_SELECT',
-    'MENTIONABLE_SELECT',
-    'CHANNEL_SELECT',
-  ]),
-  /** @deprecated Use `STRING_SELECT` instead */
-  SELECT_MENU: 3,
-};
+exports.SelectMenuComponentTypes = createEnum([
+  ...new Array(3).fill(null),
+  'STRING_MENU',
+  null,
+  'USER_SELECT',
+  'ROLE_SELECT',
+  'MENTIONABLE_SELECT',
+  'CHANNEL_SELECT',
+]);
 
 /**
  * The style of a message button
@@ -1766,27 +1696,6 @@ exports.TextInputStyles = createEnum([null, 'SHORT', 'PARAGRAPH']);
 exports.GuildScheduledEventPrivacyLevels = createEnum([null, null, 'GUILD_ONLY']);
 
 /**
- * Relationship Enums:
- * * 0: NONE
- * * 1: FRIEND
- * * 2: BLOCKED
- * * 3: PENDING_INCOMING
- * * 4: PENDING_OUTGOING
- * * 5: IMPLICIT
- * @typedef {string} RelationshipTypes
- * @see {@link https://luna.gitlab.io/discord-unofficial-docs/relationships.html}
- */
-
-exports.RelationshipTypes = createEnum([
-  'NONE',
-  'FRIEND',
-  'BLOCKED',
-  'PENDING_INCOMING',
-  'PENDING_OUTGOING',
-  'IMPLICIT',
-]);
-
-/**
  * The premium tier (Server Boost level) of a guild:
  * * NONE
  * * TIER_1
@@ -1819,6 +1728,7 @@ exports.GuildScheduledEventStatuses = createEnum([null, 'SCHEDULED', 'ACTIVE', '
  */
 exports.GuildScheduledEventEntityTypes = createEnum([null, 'STAGE_INSTANCE', 'VOICE', 'EXTERNAL']);
 /* eslint-enable max-len */
+
 /**
  * The camera video quality mode of a {@link VoiceChannel}:
  * * AUTO
@@ -1829,7 +1739,16 @@ exports.GuildScheduledEventEntityTypes = createEnum([null, 'STAGE_INSTANCE', 'VO
 exports.VideoQualityModes = createEnum([null, 'AUTO', 'FULL']);
 
 /**
- * Sort {@link ForumChannel} posts by ?
+ * The type of reaction
+ * * NORMAL
+ * * BURST
+ * @typedef {string} ReactionType
+ * @see {@link https://discord.com/developers/docs/resources/channel#channel-object-video-quality-modes}
+ */
+exports.ReactionTypes = createEnum(['NORMAL', 'BURST']);
+
+/**
+ * Sort {@link ThreadOnlyChannel} posts by creation time or activity
  * * LATEST_ACTIVITY
  * * CREATION_DATE
  * @typedef {string} SortOrderType
@@ -1847,10 +1766,40 @@ exports.SortOrderTypes = createEnum([null, 'LATEST_ACTIVITY', 'CREATION_DATE']);
  */
 exports.ForumLayoutTypes = createEnum(['NOT_SET', 'LIST_VIEW', 'GALLERY_VIEW']);
 
+/**
+ * Different layouts for {@link MessagePoll} will come in the future. For now though, this value will always be `DEFAULT`.
+ * * DEFAULT
+ * * IMAGE_ONLY_ANSWERS
+ * @typedef {string} PollLayoutType
+ * @see {@link https://docs.discord.sex/resources/message#poll-layout-type}
+ */
+exports.PollLayoutTypes = createEnum([null, 'DEFAULT', 'IMAGE_ONLY_ANSWERS']);
+
+/**
+ * Relationship Enums:
+ * * 0: NONE
+ * * 1: FRIEND
+ * * 2: BLOCKED
+ * * 3: PENDING_INCOMING
+ * * 4: PENDING_OUTGOING
+ * * 5: IMPLICIT
+ * @typedef {string} RelationshipType
+ * @see {@link https://luna.gitlab.io/discord-unofficial-docs/relationships.html}
+ */
+
+exports.RelationshipTypes = createEnum([
+  'NONE',
+  'FRIEND',
+  'BLOCKED',
+  'PENDING_INCOMING',
+  'PENDING_OUTGOING',
+  'IMPLICIT',
+]);
+
 exports._cleanupSymbol = Symbol('djsCleanup');
 
 function keyMirror(arr) {
-  const tmp = Object.create(null);
+  let tmp = Object.create(null);
   for (const value of arr) tmp[value] = value;
   return tmp;
 }
@@ -1905,12 +1854,11 @@ function createEnum(keys) {
  * @property {Object<InteractionResponseType, number>} InteractionResponseTypes The type of an interaction response.
  * @property {Object<InteractionType, number>} InteractionTypes The type of an {@link Interaction} object.
  * @property {InviteScope[]} InviteScopes The scopes of an invite.
- * @property {number} MaxBulkDeletableMessageAge Max bulk deletable message age (Unavailable to selfbots)
+ * @property {Object<RelationshipType, number>} RelationshipTypes Relationship Enums
  * @property {Object<MembershipState, number>} MembershipStates The value set for a team members membership state.
  * @property {Object<MessageButtonStyle, number>} MessageButtonStyles The style of a message button.
  * @property {Object<MessageComponentType, number>} MessageComponentTypes The type of a message component.
  * @property {MessageType[]} MessageTypes The type of a {@link Message} object.
- * @property {Object<SelectMenuComponentType, number>} SelectMenuComponentTypes The type of any select menu.
  * @property {Object<MFALevel, number>} MFALevels The required MFA level for a guild.
  * @property {Object<NSFWLevel, number>} NSFWLevels NSFW level of a guild.
  * @property {Opcodes} Opcodes The types of Opcodes sent to the Gateway.
@@ -1921,6 +1869,7 @@ function createEnum(keys) {
  * @property {Object<PrivacyLevel, number>} PrivacyLevels Privacy level of a {@link StageInstance} object.
  * @property {ShardEvents} ShardEvents The type of events emitted by a Shard.
  * @property {Status} Status The available statuses of the client.
+ * @property {Object<SelectMenuComponentType, number>} SelectMenuComponentTypes The type of any select menu.
  * @property {Object<StickerFormatType, number>} StickerFormatTypes The value set for a stickers format type.
  * @property {Object<StickerType, number>} StickerTypes The value set for a stickers type.
  * @property {SweeperKey[]} SweeperKeys The name of an item to be swept in Sweepers.

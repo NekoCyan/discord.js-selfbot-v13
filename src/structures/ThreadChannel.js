@@ -3,7 +3,6 @@
 const { Channel } = require('./Channel');
 const TextBasedChannel = require('./interfaces/TextBasedChannel');
 const { RangeError } = require('../errors');
-const InteractionManager = require('../managers/InteractionManager');
 const MessageManager = require('../managers/MessageManager');
 const ThreadMemberManager = require('../managers/ThreadMemberManager');
 const ChannelFlags = require('../util/ChannelFlags');
@@ -26,6 +25,12 @@ class ThreadChannel extends Channel {
     this.guild = guild;
 
     /**
+     * The id of the member who created this thread
+     * @type {Snowflake}
+     */
+    this.ownerId = data.owner_id;
+
+    /**
      * The id of the guild the channel is in
      * @type {Snowflake}
      */
@@ -42,22 +47,7 @@ class ThreadChannel extends Channel {
      * @type {ThreadMemberManager}
      */
     this.members = new ThreadMemberManager(this);
-
-    /**
-     * A manager of the interactions sent to this channel
-     * @type {InteractionManager}
-     */
-    this.interactions = new InteractionManager(this);
     if (data) this._patch(data);
-  }
-
-  /**
-   * First message in the thread
-   * @type {?Message}
-   * @readonly
-   */
-  get firstMessage() {
-    return this.messages.cache.get(this.id);
   }
 
   _patch(data, partial = false) {
@@ -132,16 +122,6 @@ class ThreadChannel extends Channel {
     }
 
     this._createdTimestamp ??= this.type === 'GUILD_PRIVATE_THREAD' ? super.createdTimestamp : null;
-
-    if ('owner_id' in data) {
-      /**
-       * The id of the member who created this thread
-       * @type {?Snowflake}
-       */
-      this.ownerId = data.owner_id;
-    } else {
-      this.ownerId ??= null;
-    }
 
     if ('last_message_id' in data) {
       /**
@@ -262,7 +242,7 @@ class ThreadChannel extends Channel {
 
   /**
    * The parent channel of this thread
-   * @type {?(NewsChannel|TextChannel|ForumChannel)}
+   * @type {?(NewsChannel|TextChannel|ForumChannel|MediaChannel)}
    * @readonly
    */
   get parent() {
@@ -614,9 +594,6 @@ class ThreadChannel extends Channel {
   sendTyping() {}
   createMessageCollector() {}
   awaitMessages() {}
-  createMessageComponentCollector() {}
-  awaitMessageComponent() {}
-  bulkDelete() {}
   // Doesn't work on Thread channels; setRateLimitPerUser() {}
   // Doesn't work on Thread channels; setNSFW() {}
 }

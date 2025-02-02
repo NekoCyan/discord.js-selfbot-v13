@@ -1,47 +1,41 @@
+/* eslint-disable no-unreachable */
 'use strict';
 
 const process = require('node:process');
-const { setInterval, setTimeout } = require('node:timers');
+const { setInterval } = require('node:timers');
+const { setTimeout } = require('node:timers');
 const { Collection } = require('@discordjs/collection');
-const { getVoiceConnection } = require('@discordjs/voice');
-const chalk = require('chalk');
-const fetch = require('node-fetch');
 const BaseClient = require('./BaseClient');
 const ActionsManager = require('./actions/ActionsManager');
 const ClientVoiceManager = require('./voice/ClientVoiceManager');
 const WebSocketManager = require('./websocket/WebSocketManager');
-const { Error, TypeError, RangeError } = require('../errors');
-const Discord = require('../index');
+const { Error, TypeError } = require('../errors');
 const BaseGuildEmojiManager = require('../managers/BaseGuildEmojiManager');
 const BillingManager = require('../managers/BillingManager');
 const ChannelManager = require('../managers/ChannelManager');
 const ClientUserSettingManager = require('../managers/ClientUserSettingManager');
-const DeveloperPortalManager = require('../managers/DeveloperPortalManager');
 const GuildManager = require('../managers/GuildManager');
+const PresenceManager = require('../managers/PresenceManager');
 const RelationshipManager = require('../managers/RelationshipManager');
-const SessionManager = require('../managers/SessionManager');
 const UserManager = require('../managers/UserManager');
+const UserNoteManager = require('../managers/UserNoteManager');
 const VoiceStateManager = require('../managers/VoiceStateManager');
 const ShardClientUtil = require('../sharding/ShardClientUtil');
 const ClientPresence = require('../structures/ClientPresence');
 const GuildPreview = require('../structures/GuildPreview');
 const GuildTemplate = require('../structures/GuildTemplate');
 const Invite = require('../structures/Invite');
-const { CustomStatus } = require('../structures/RichPresence');
 const { Sticker } = require('../structures/Sticker');
 const StickerPack = require('../structures/StickerPack');
 const VoiceRegion = require('../structures/VoiceRegion');
 const Webhook = require('../structures/Webhook');
 const Widget = require('../structures/Widget');
-const { Events, InviteScopes, Status, captchaServices } = require('../util/Constants');
+const { Events, Status } = require('../util/Constants');
 const DataResolver = require('../util/DataResolver');
 const Intents = require('../util/Intents');
-const Options = require('../util/Options');
-const Permissions = require('../util/Permissions');
 const DiscordAuthWebsocket = require('../util/RemoteAuth');
 const Sweepers = require('../util/Sweepers');
-const { lazy, testImportModule } = require('../util/Util');
-const Message = lazy(() => require('../structures/Message').Message);
+const TOTP = require('../util/Totp');
 
 /**
  * The main hub for interacting with the Discord API, and the starting point for any bot.
@@ -49,43 +43,10 @@ const Message = lazy(() => require('../structures/Message').Message);
  */
 class Client extends BaseClient {
   /**
-   * @param {ClientOptions} options Options for the client
+   * @param {ClientOptions} [options] Options for the client
    */
-  constructor(options = {}) {
+  constructor(options) {
     super(options);
-
-    const data = require('node:worker_threads').workerData ?? process.env;
-    const defaults = Options.createDefault();
-
-    if (this.options.shards === defaults.shards) {
-      if ('SHARDS' in data) {
-        this.options.shards = JSON.parse(data.SHARDS);
-      }
-    }
-
-    if (this.options.shardCount === defaults.shardCount) {
-      if ('SHARD_COUNT' in data) {
-        this.options.shardCount = Number(data.SHARD_COUNT);
-      } else if (Array.isArray(this.options.shards)) {
-        this.options.shardCount = this.options.shards.length;
-      }
-    }
-
-    const typeofShards = typeof this.options.shards;
-
-    if (typeofShards === 'undefined' && typeof this.options.shardCount === 'number') {
-      this.options.shards = Array.from({ length: this.options.shardCount }, (_, i) => i);
-    }
-
-    if (typeofShards === 'number') this.options.shards = [this.options.shards];
-
-    if (Array.isArray(this.options.shards)) {
-      this.options.shards = [
-        ...new Set(
-          this.options.shards.filter(item => !isNaN(item) && item >= 0 && item < Infinity && item === (item | 0)),
-        ),
-      ];
-    }
 
     this._validateOptions();
 
@@ -137,43 +98,20 @@ class Client extends BaseClient {
       : null;
 
     /**
-     * All of the {@link User} objects that have been cached at any point, mapped by their ids
+     * The user manager of this client
      * @type {UserManager}
      */
     this.users = new UserManager(this);
 
-    // Patch
     /**
-     * All of the relationships {@link User}
-     * @type {RelationshipManager}
-     */
-    this.relationships = new RelationshipManager(this);
-    /**
-     * All of the settings {@link Object}
-     * @type {ClientUserSettingManager}
-     */
-    this.settings = new ClientUserSettingManager(this);
-    /**
-     * All of the guilds the client is currently handling, mapped by their ids -
+     * A manager of all the guilds the client is currently handling -
      * as long as sharding isn't being used, this will be *every* guild the bot is a member of
      * @type {GuildManager}
      */
     this.guilds = new GuildManager(this);
 
     /**
-     * Manages the API methods
-     * @type {BillingManager}
-     */
-    this.billing = new BillingManager(this);
-
-    /**
-     * All of the sessions of the client
-     * @type {SessionManager}
-     */
-    this.sessions = new SessionManager(this);
-
-    /**
-     * All of the {@link Channel}s that the client is currently handling, mapped by their ids -
+     * All of the {@link Channel}s that the client is currently handling -
      * as long as sharding isn't being used, this will be *every* channel in *every* guild the bot
      * is a member of. Note that DM channels will not be initially cached, and thus not be present
      * in the Manager without their explicit fetching or use.
@@ -188,17 +126,41 @@ class Client extends BaseClient {
     this.sweepers = new Sweepers(this, this.options.sweepers);
 
     /**
-     * The developer portal manager of the client
-     * @type {DeveloperPortalManager}
-     */
-    this.developerPortal = new DeveloperPortalManager(this);
-
-    /**
      * The presence of the Client
      * @private
      * @type {ClientPresence}
      */
     this.presence = new ClientPresence(this, this.options.presence);
+
+    /**
+     * A manager of the presences belonging to this client
+     * @type {PresenceManager}
+     */
+    this.presences = new PresenceManager(this);
+
+    /**
+     * All of the note that have been cached at any point, mapped by their ids
+     * @type {UserManager}
+     */
+    this.notes = new UserNoteManager(this);
+
+    /**
+     * All of the relationships {@link User}
+     * @type {RelationshipManager}
+     */
+    this.relationships = new RelationshipManager(this);
+
+    /**
+     * Manages the API methods
+     * @type {BillingManager}
+     */
+    this.billing = new BillingManager(this);
+
+    /**
+     * All of the settings {@link Object}
+     * @type {ClientUserSettingManager}
+     */
+    this.settings = new ClientUserSettingManager(this);
 
     Object.defineProperty(this, 'token', { writable: true });
     if (!this.token && 'DISCORD_TOKEN' in process.env) {
@@ -213,8 +175,6 @@ class Client extends BaseClient {
       this.token = null;
     }
 
-    this._interactionCache = new Collection();
-
     /**
      * User that the client is logged in as
      * @type {?ClientUser}
@@ -222,23 +182,11 @@ class Client extends BaseClient {
     this.user = null;
 
     /**
-     * The application of this bot
-     * @type {?ClientApplication}
-     */
-    this.application = null;
-
-    /**
      * Time at which the client was last regarded as being in the `READY` state
      * (each time the client disconnects and successfully reconnects, this will be overwritten)
      * @type {?Date}
      */
     this.readyAt = null;
-
-    /**
-     * Password cache
-     * @type {?string}
-     */
-    this.password = this.options.password;
 
     if (this.options.messageSweepInterval > 0) {
       process.emitWarning(
@@ -253,16 +201,7 @@ class Client extends BaseClient {
   }
 
   /**
-   * Session ID
-   * @type {?string}
-   * @readonly
-   */
-  get sessionId() {
-    return this.ws.shards.first()?.sessionId;
-  }
-
-  /**
-   * All custom emojis that the client has access to, mapped by their ids
+   * A manager of all the custom emojis that the client has access to
    * @type {BaseGuildEmojiManager}
    * @readonly
    */
@@ -293,19 +232,6 @@ class Client extends BaseClient {
   }
 
   /**
-   * @external VoiceConnection
-   * @see {@link https://discord.js.org/#/docs/voice/main/class/VoiceConnection}
-   */
-  /**
-   * Get connection to current call
-   * @type {?VoiceConnection}
-   * @readonly
-   */
-  get callVoice() {
-    return getVoiceConnection(null);
-  }
-
-  /**
    * Logs the client in, establishing a WebSocket connection to Discord.
    * @param {string} [token=this.token] Token of the account to log in with
    * @returns {Promise<string>} Token of the account used
@@ -321,8 +247,7 @@ class Client extends BaseClient {
       Logging on with a user token is unfortunately against the Discord
       \`Terms of Service\` <https://support.discord.com/hc/en-us/articles/115002192352>
       and doing so might potentially get your account banned.
-      Use this at your own risk.
-`,
+      Use this at your own risk.`,
     );
     this.emit(
       Events.DEBUG,
@@ -347,178 +272,45 @@ class Client extends BaseClient {
     }
   }
 
-  /**
-   * Login Discord with Username and Password
-   * @param {string} username Email or Phone Number
-   * @param {?string} password Password
-   * @param {?string} mfaCode 2FA Code / Backup Code
-   * @returns {Promise<string>}
-   */
-  async normalLogin(username, password = this.password, mfaCode) {
-    if (!username || !password || typeof username !== 'string' || typeof password !== 'string') {
-      throw new Error('NORMAL_LOGIN');
-    }
-    this.emit(
-      Events.DEBUG,
-      `Connecting to Discord with: 
-      username: ${username}
-      password: ${password.replace(/./g, '*')}`,
-    );
-    const data = await this.api.auth.login.post({
-      data: {
-        login: username,
-        password: password,
-        undelete: false,
-        captcha_key: null,
-        login_source: null,
-        gift_code_sku_id: null,
-      },
-      auth: false,
-    });
-    this.password = password;
-    if (!data.token && data.ticket && data.mfa) {
-      this.emit(Events.DEBUG, `Using 2FA Code: ${mfaCode}`);
-      const normal2fa = /(\d{6})/g;
-      const backupCode = /([a-z0-9]{4})-([a-z0-9]{4})/g;
-      if (!mfaCode || typeof mfaCode !== 'string') {
-        throw new Error('LOGIN_FAILED_2FA');
-      }
-      if (normal2fa.test(mfaCode) || backupCode.test(mfaCode)) {
-        const data2 = await this.api.auth.mfa.totp.post({
-          data: {
-            code: mfaCode,
-            ticket: data.ticket,
-            login_source: null,
-            gift_code_sku_id: null,
-          },
-          auth: false,
-        });
-        return this.login(data2.token);
-      } else {
-        throw new Error('LOGIN_FAILED_2FA');
-      }
-    } else if (data.token) {
-      return this.login(data.token);
-    } else {
-      throw new Error('LOGIN_FAILED_UNKNOWN');
-    }
+  QRLogin() {
+    const ws = new DiscordAuthWebsocket();
+    ws.once('ready', () => ws.generateQR());
+    return ws.connect(this);
   }
 
   /**
-   * Switch the user
-   * @param {string} token User Token
-   * @returns {Promise<string>}
-   */
-  switchUser(token) {
-    this._clearCache(this.emojis.cache);
-    this._clearCache(this.guilds.cache);
-    this._clearCache(this.channels.cache);
-    this._clearCache(this.users.cache);
-    this._clearCache(this.relationships.cache);
-    this._clearCache(this.sessions.cache);
-    this._clearCache(this.voiceStates.cache);
-    this.ws.status = Status.IDLE;
-    return this.login(token);
-  }
-
-  /**
-   * Sign in with the QR code on your phone.
-   * @param {DiscordAuthWebsocketOptions} options Options
-   * @returns {DiscordAuthWebsocket}
+   * Logs the client in, establishing a WebSocket connection to Discord.
+   * @param {string} email The email associated with the account
+   * @param {string} password The password assicated with the account
+   * @returns {string | null} Token of the account used
+   *
    * @example
-   * client.QRLogin();
+   * client.passLogin("test@gmail.com", "SuperSecretPa$$word", 1234)
+   * @deprecated This method will not be updated until I find the most convenient way to implement MFA.
    */
-  QRLogin(options = {}) {
-    const QR = new DiscordAuthWebsocket({ ...options, autoLogin: true });
-    this.emit(Events.DEBUG, `Preparing to connect to the gateway (QR Login)`, QR);
-    return QR.connect(this);
-  }
-
-  /**
-   * Implement `remoteAuth`, like using your phone to scan a QR code
-   * @param {string} url URL from QR code
-   * @returns {Promise<void>}
-   */
-  async remoteAuth(url) {
-    if (!this.isReady()) throw new Error('CLIENT_NOT_READY', 'Remote Auth');
-    // Step 1: Parse URL
-    url = new URL(url);
-    if (
-      !['discordapp.com', 'discord.com'].includes(url.hostname) ||
-      !url.pathname.startsWith('/ra/') ||
-      url.pathname.length <= 4
-    ) {
-      throw new Error('INVALID_REMOTE_AUTH_URL');
-    }
-    const hash = url.pathname.replace('/ra/', '');
-    // Step 2: Post > Get handshake_token
-    const res = await this.api.users['@me']['remote-auth'].post({
-      data: {
-        fingerprint: hash,
-      },
+  async passLogin(email, password) {
+    const initial = await this.api.auth.login.post({
+      auth: false,
+      versioned: true,
+      data: { gift_code_sku_id: null, login_source: null, undelete: false, login: email, password },
     });
-    const handshake_token = res.handshake_token;
-    // Step 3: Post
-    return this.api.users['@me']['remote-auth'].finish.post({ data: { handshake_token, temporary_token: false } });
-    // Cancel
-    // this.api.users['@me']['remote-auth'].cancel.post({ data: { handshake_token } });
-  }
 
-  /**
-   * Create a new token based on the current token
-   * @returns {Promise<string>} New Discord Token
-   */
-  createToken() {
-    return new Promise((resolve, reject) => {
-      // Step 1: Create DiscordAuthWebsocket
-      const QR = new DiscordAuthWebsocket({
-        hiddenLog: true,
-        generateQR: false,
-        autoLogin: false,
-        debug: false,
-        failIfError: false,
-        userAgent: this.options.http.headers['User-Agent'],
-        wsProperties: this.options.ws.properties,
+    if ('token' in initial) {
+      return this.login(initial.token);
+    } else if ('ticket' in initial) {
+      if (!this.options.TOTPKey) throw new Error('TOTPKEY_MISSING');
+      const { otp } = await TOTP.generate(this.options.TOTPKey);
+      const totp = await this.api.auth.mfa.totp.post({
+        auth: false,
+        versioned: true,
+        data: { gift_code_sku_id: null, login_source: null, code: otp, ticket: initial.ticket },
       });
-      // Step 2: Add event
-      QR.once('ready', async (_, url) => {
-        try {
-          await this.remoteAuth(url);
-        } catch (e) {
-          reject(e);
-        }
-      }).once('finish', (user, token) => {
-        resolve(token);
-      });
-      // Step 3: Connect
-      QR.connect();
-    });
-  }
-
-  /**
-   * Emitted whenever clientOptions.checkUpdate = false
-   * @event Client#update
-   * @param {string} oldVersion Current version
-   * @param {string} newVersion Latest version
-   */
-
-  /**
-   * Check for updates
-   * @returns {Promise<Client>}
-   */
-  async checkUpdate() {
-    const res_ = await (
-      await fetch(`https://registry.npmjs.com/${encodeURIComponent('discord.js-selfbot-v13')}`)
-    ).json();
-    try {
-      const latest_tag = res_['dist-tags'].latest;
-      this.emit('update', Discord.version, latest_tag);
-      this.emit('debug', `${chalk.greenBright('[OK]')} Check Update success`);
-    } catch {
-      this.emit('debug', `${chalk.redBright('[Fail]')} Check Update error`);
-      this.emit('update', Discord.version, false);
+      if ('token' in totp) {
+        return this.login(totp.token);
+      }
     }
-    return this;
+
+    return null;
   }
 
   /**
@@ -527,7 +319,7 @@ class Client extends BaseClient {
    * @returns {boolean}
    */
   isReady() {
-    return this.ws.status === Status.READY;
+    return !this.ws.destroyed && this.ws.status === Status.READY;
   }
 
   /**
@@ -545,7 +337,6 @@ class Client extends BaseClient {
     this.sweepers.destroy();
     this.ws.destroy();
     this.token = null;
-    this.password = null;
   }
 
   /**
@@ -559,7 +350,7 @@ class Client extends BaseClient {
         voip_provider: null,
       },
     });
-    await this.destroy();
+    return this.destroy();
   }
 
   /**
@@ -585,68 +376,6 @@ class Client extends BaseClient {
       query: { with_counts: true, with_expiration: true, guild_scheduled_event_id: options?.guildScheduledEventId },
     });
     return new Invite(this, data);
-  }
-
-  /**
-   * Join this Guild using this invite (fast)
-   * @param {InviteResolvable} invite Invite code or URL
-   * @returns {Promise<void>}
-   * @example
-   * await client.acceptInvite('https://discord.gg/genshinimpact')
-   */
-  async acceptInvite(invite) {
-    const code = DataResolver.resolveInviteCode(invite);
-    if (!code) throw new Error('INVITE_RESOLVE_CODE');
-    if (invite instanceof Invite) {
-      await invite.acceptInvite();
-    } else {
-      await this.api.invites(code).post({
-        headers: {
-          'X-Context-Properties': 'eyJsb2NhdGlvbiI6Ik1hcmtkb3duIExpbmsifQ==', // Markdown Link
-        },
-        data: {
-          session_id: this.sessionId,
-        },
-      });
-    }
-  }
-
-  /**
-   * Automatically Redeem Nitro from raw message.
-   * @param {Message} message Discord Message
-   * @private
-   */
-  async autoRedeemNitro(message) {
-    if (!(message instanceof Message())) return;
-    if (!message.content) return;
-    const allLinks =
-      message.content.match(/(discord.gift|discord.com|discordapp.com\/gifts)\/(\w{16,25})/gm) ||
-      message.content.match(/(discord\.gift\/|discord\.com\/gifts\/|discordapp\.com\/gifts\/)(\w+)/gm);
-    if (!allLinks) return;
-    for (const link of allLinks) {
-      await this.redeemNitro(link, message.channel);
-    }
-  }
-
-  /**
-   * Redeem nitro from code or url.
-   * @param {string} nitro Nitro url or code
-   * @param {TextChannelResolvable} channel Channel that the code was sent in
-   * @param {Snowflake} [paymentSourceId] Payment source id
-   * @returns {Promise<any>}
-   */
-  redeemNitro(nitro, channel, paymentSourceId) {
-    if (typeof nitro !== 'string') throw new Error('INVALID_NITRO');
-    const nitroCode =
-      nitro.match(/(discord.gift|discord.com|discordapp.com\/gifts)\/(\w{16,25})/) ||
-      nitro.match(/(discord\.gift\/|discord\.com\/gifts\/|discordapp\.com\/gifts\/)(\w+)/);
-    if (!nitroCode) return false;
-    const code = nitroCode[2];
-    channel = this.channels.resolveId(channel);
-    return this.api.entitlements['gift-codes'](code).redeem.post({
-      auth: true,
-      data: { channel_id: channel || null, payment_source_id: paymentSourceId || null },
-    });
   }
 
   /**
@@ -740,16 +469,6 @@ class Client extends BaseClient {
   }
 
   /**
-   * Clear a cache
-   * @param {Collection} cache The cache to clear
-   * @returns {number} The number of removed entries
-   * @private
-   */
-  _clearCache(cache) {
-    return cache.sweep(() => true);
-  }
-
-  /**
    * Sweeps all text-based channels' messages and removes the ones older than the max message lifetime.
    * If the message has been edited, the time of the edit is used rather than the time of the original message.
    * @param {number} [lifetime=this.options.messageCacheLifetime] Messages that are older than this (in seconds)
@@ -800,6 +519,35 @@ class Client extends BaseClient {
   }
 
   /**
+   * Refresh the Discord CDN links with hashes so they can be usable.
+   * @param {...string} urls Discord CDN URLs
+   * @returns {Promise<Array<{ original: string, refreshed: string }>>}
+   */
+  async refreshAttachmentURL(...urls) {
+    // Clean up the URLs
+    urls = urls.map(url => {
+      const urlObject = new URL(url);
+      // Clean query
+      urlObject.search = '';
+      return urlObject.toString();
+    });
+    const data = await this.api.attachments('refresh-urls').post({
+      data: { attachment_urls: urls },
+    });
+    /**
+{
+    "refreshed_urls": [
+        {
+            "original": "url",
+            "refreshed": "url with hash"
+        }
+    ]
+}
+     */
+    return data.refreshed_urls;
+  }
+
+  /**
    * Options for {@link Client#generateInvite}.
    * @typedef {Object} InviteGenerationOptions
    * @property {InviteScope[]} scopes Scopes that should be requested
@@ -809,71 +557,237 @@ class Client extends BaseClient {
    */
 
   /**
-   * Generates a link that can be used to invite the bot to a guild.
-   * @param {InviteGenerationOptions} [options={}] Options for the invite
-   * @returns {string}
-   * @example
-   * const link = client.generateInvite({
-   *   scopes: ['applications.commands'],
-   * });
-   * console.log(`Generated application invite link: ${link}`);
-   * @example
-   * const link = client.generateInvite({
-   *   permissions: [
-   *     Permissions.FLAGS.SEND_MESSAGES,
-   *     Permissions.FLAGS.MANAGE_GUILD,
-   *     Permissions.FLAGS.MENTION_EVERYONE,
-   *   ],
-   *   scopes: ['bot'],
-   * });
-   * console.log(`Generated bot invite link: ${link}`);
+   * The sleep function in JavaScript returns a promise that resolves after a specified timeout.
+   * @param {number} timeout - The timeout parameter is the amount of time, in milliseconds, that the sleep
+   * function will wait before resolving the promise and continuing execution.
+   * @returns {void} The `sleep` function is returning a Promise.
    */
-  generateInvite(options = {}) {
-    if (typeof options !== 'object') throw new TypeError('INVALID_TYPE', 'options', 'object', true);
-    if (!this.application) throw new Error('CLIENT_NOT_READY', 'generate an invite link');
-
-    const query = new URLSearchParams({
-      client_id: this.application.id,
-    });
-
-    const { scopes } = options;
-    if (typeof scopes === 'undefined') {
-      throw new TypeError('INVITE_MISSING_SCOPES');
-    }
-    if (!Array.isArray(scopes)) {
-      throw new TypeError('INVALID_TYPE', 'scopes', 'Array of Invite Scopes', true);
-    }
-    if (!scopes.some(scope => ['bot', 'applications.commands'].includes(scope))) {
-      throw new TypeError('INVITE_MISSING_SCOPES');
-    }
-    const invalidScope = scopes.find(scope => !InviteScopes.includes(scope));
-    if (invalidScope) {
-      throw new TypeError('INVALID_ELEMENT', 'Array', 'scopes', invalidScope);
-    }
-    query.set('scope', scopes.join(' '));
-
-    if (options.permissions) {
-      const permissions = Permissions.resolve(options.permissions);
-      if (permissions) query.set('permissions', permissions);
-    }
-
-    if (options.disableGuildSelect) {
-      query.set('disable_guild_select', true);
-    }
-
-    if (options.guild) {
-      const guildId = this.guilds.resolveId(options.guild);
-      if (!guildId) throw new TypeError('INVALID_TYPE', 'options.guild', 'GuildResolvable');
-      query.set('guild_id', guildId);
-    }
-
-    return `${this.options.http.api}${this.api.oauth2.authorize}?${query}`;
+  sleep(timeout) {
+    return new Promise(r => setTimeout(r, timeout));
   }
 
   toJSON() {
     return super.toJSON({
       readyAt: false,
     });
+  }
+
+  /**
+   * The current session id of the shard
+   * @type {?string}
+   */
+  get sessionId() {
+    return this.ws.shards.first()?.sessionId;
+  }
+
+  /**
+   * Options for {@link Client#acceptInvite}.
+   * @typedef {Object} AcceptInviteOptions
+   * @property {boolean} [bypassOnboarding=true] Whether to bypass onboarding
+   * @property {boolean} [bypassVerify=true] Whether to bypass rule screening
+   */
+
+  /**
+   * Join this Guild / GroupDMChannel using this invite
+   * @param {InviteResolvable} invite Invite code or URL
+   * @param {AcceptInviteOptions} [options] Options
+   * @returns {Promise<Guild|DMChannel|GroupDMChannel>}
+   * @example
+   * await client.acceptInvite('https://discord.gg/genshinimpact', { bypassOnboarding: true, bypassVerify: true })
+   */
+  async acceptInvite(invite, options = { bypassOnboarding: true, bypassVerify: true }) {
+    // ! throw new Error('METHOD_WARNING');
+    const code = DataResolver.resolveInviteCode(invite);
+    if (!code) throw new Error('INVITE_RESOLVE_CODE');
+    const i = await this.fetchInvite(code);
+    if (i.guild?.id && this.guilds.cache.has(i.guild?.id)) return this.guilds.cache.get(i.guild?.id);
+    if (this.channels.cache.has(i.channelId)) return this.channels.cache.get(i.channelId);
+    const data = await this.api.invites(code).post({
+      DiscordContext: { location: 'Markdown Link' },
+      data: {
+        session_id: this.sessionId,
+      },
+    });
+    this.emit(Events.DEBUG, `[Invite > Guild ${i.guild?.id}] Joined`);
+    // Guild
+    if (i.guild?.id) {
+      const guild = this.guilds.cache.get(i.guild?.id);
+      if (i.flags.has('GUEST')) {
+        this.emit(Events.DEBUG, `[Invite > Guild ${i.guild?.id}] Guest invite`);
+        return guild;
+      }
+      if (options.bypassOnboarding) {
+        const onboardingData = await this.api.guilds[i.guild?.id].onboarding.get();
+        // Onboarding
+        if (onboardingData.enabled) {
+          const prompts = onboardingData.prompts.filter(o => o.in_onboarding);
+          if (prompts.length) {
+            const onboarding_prompts_seen = {};
+            const onboarding_responses = [];
+            const onboarding_responses_seen = {};
+
+            const currentDate = Date.now();
+
+            prompts.forEach(prompt => {
+              onboarding_prompts_seen[prompt.id] = currentDate;
+              if (prompt.required) onboarding_responses.push(prompt.options[0].id);
+              prompt.options.forEach(option => {
+                onboarding_responses_seen[option.id] = currentDate;
+              });
+            });
+
+            await this.api.guilds[i.guild?.id]['onboarding-responses'].post({
+              data: {
+                onboarding_prompts_seen,
+                onboarding_responses,
+                onboarding_responses_seen,
+              },
+            });
+            this.emit(Events.DEBUG, `[Invite > Guild ${i.guild?.id}] Bypassed onboarding`);
+          }
+        }
+      }
+      // Read rule
+      if (data.show_verification_form && options.bypassVerify) {
+        // Check Guild
+        if (i.guild.verificationLevel == 'VERY_HIGH' && !this.user.phone) {
+          this.emit(Events.DEBUG, `[Invite > Guild ${i.guild?.id}] Cannot bypass verify (Phone required)`);
+          return this.guilds.cache.get(i.guild?.id);
+        }
+        if (i.guild.verificationLevel !== 'NONE' && !this.user.email) {
+          this.emit(Events.DEBUG, `[Invite > Guild ${i.guild?.id}] Cannot bypass verify (Email required)`);
+          return this.guilds.cache.get(i.guild?.id);
+        }
+        const getForm = await this.api
+          .guilds(i.guild?.id)
+          ['member-verification'].get({ query: { with_guild: false, invite_code: this.code } })
+          .catch(() => {});
+        if (getForm && getForm.form_fields[0]) {
+          const form = Object.assign(getForm.form_fields[0], { response: true });
+          await this.api
+            .guilds(i.guild?.id)
+            .requests['@me'].put({ data: { form_fields: [form], version: getForm.version } });
+          this.emit(Events.DEBUG, `[Invite > Guild ${i.guild?.id}] Bypassed verify`);
+        }
+      }
+      return guild;
+    } else {
+      return this.channels.cache.has(i.channelId || data.channel?.id);
+    }
+  }
+
+  /**
+   * Redeem nitro from code or url.
+   * @param {string} nitro Nitro url or code
+   * @param {TextChannelResolvable} [channel] Channel that the code was sent in
+   * @param {Snowflake} [paymentSourceId] Payment source id
+   * @returns {Promise<any>}
+   */
+  redeemNitro(nitro, channel, paymentSourceId) {
+    if (typeof nitro !== 'string') throw new Error('INVALID_NITRO');
+    const nitroCode =
+      nitro.match(/(discord.gift|discord.com|discordapp.com\/gifts)\/(\w{16,25})/) ||
+      nitro.match(/(discord\.gift\/|discord\.com\/gifts\/|discordapp\.com\/gifts\/)(\w+)/);
+    if (!nitroCode) return false;
+    const code = nitroCode[2];
+    channel = this.channels.resolveId(channel);
+    return this.api.entitlements['gift-codes'](code).redeem.post({
+      auth: true,
+      data: { channel_id: channel || null, payment_source_id: paymentSourceId || null },
+    });
+  }
+
+  /**
+   * @typedef {Object} OAuth2AuthorizeOptions
+   * @property {string} [guild_id] Guild ID
+   * @property {string} [permissions] Permissions
+   * @property {boolean} [authorize] Whether to authorize or not
+   * @property {string} [code] 2FA Code
+   * @property {string} [webhook_channel_id] Webhook Channel ID
+   */
+
+  /**
+   * Authorize an application.
+   * @param {string} urlOAuth2 Discord Auth URL
+   * @param {OAuth2AuthorizeOptions} [options] Oauth2 options
+   * @returns {Promise<{ location: string }>}
+   * @example
+   * client.authorizeURL(`https://discord.com/api/oauth2/authorize?client_id=botID&permissions=8&scope=applications.commands%20bot`, {
+      guild_id: "guildID",
+    })
+   */
+  authorizeURL(urlOAuth2, options = {}) {
+    // ! throw new Error('METHOD_WARNING');
+    const url = new URL(urlOAuth2);
+    if (!/^https:\/\/(?:canary\.|ptb\.)?discord\.com(?:\/api(?:\/v\d{1,2})?)?\/oauth2\/authorize\?/.test(urlOAuth2)) {
+      throw new Error('INVALID_URL', urlOAuth2);
+    }
+    const searchParams = Object.fromEntries(url.searchParams);
+    // Assign options
+    options = {
+      authorize: true,
+      permissions: '0',
+      integration_type: 0,
+      location_context: {
+        guild_id: '10000',
+        channel_id: '10000',
+        channel_type: 10000,
+      },
+      ...searchParams,
+      ...options,
+    };
+    delete searchParams.permissions;
+    delete searchParams.integration_type;
+    delete searchParams.guild_id;
+    return this.api.oauth2.authorize.post({
+      query: searchParams,
+      data: options,
+    });
+  }
+
+  /**
+   * Install User Apps
+   * @param {Snowflake} applicationId  Discord Application id
+   * @returns {Promise<void>}
+   */
+  installUserApps(applicationId) {
+    return this.api
+      .applications(applicationId)
+      .public.get({
+        query: {
+          with_guild: false,
+        },
+      })
+      .then(rawData => {
+        const installTypes = rawData.integration_types_config['1'];
+        if (installTypes) {
+          return this.api.oauth2.authorize.post({
+            query: {
+              client_id: applicationId,
+              scope: installTypes.oauth2_install_params.scopes.join(' '),
+            },
+            data: {
+              permissions: '0',
+              authorize: true,
+              integration_type: 1,
+            },
+          });
+        } else {
+          return false;
+        }
+      });
+  }
+
+  /**
+   * Deauthorize an application.
+   * @param {Snowflake} applicationId Discord Application id
+   * @returns {Promise<void>}
+   */
+  deauthorize(applicationId) {
+    return this.api.oauth2.tokens
+      .get()
+      .then(data => data.find(o => o.application.id == applicationId))
+      .then(o => this.api.oauth2.tokens(o.id).delete());
   }
 
   /**
@@ -888,169 +802,11 @@ class Client extends BaseClient {
   }
 
   /**
-   * Sets the client's presence. (Sync Setting).
-   * @param {Client} client Discord Client
-   * @private
-   */
-  customStatusAuto(client) {
-    client = client ?? this;
-    if (!client.user) return;
-    const custom_status = new CustomStatus();
-    if (!client.settings.rawSetting.custom_status?.text && !client.settings.rawSetting.custom_status?.emoji_name) {
-      client.user.setPresence({
-        activities: this.presence.activities.filter(a => a.type !== 'CUSTOM'),
-        status: client.settings.rawSetting.status ?? 'invisible',
-      });
-    } else {
-      custom_status.setEmoji({
-        name: client.settings.rawSetting.custom_status?.emoji_name,
-        id: client.settings.rawSetting.custom_status?.emoji_id,
-      });
-      custom_status.setState(client.settings.rawSetting.custom_status?.text);
-      client.user.setPresence({
-        activities: [custom_status.toJSON(), ...this.presence.activities.filter(a => a.type !== 'CUSTOM')],
-        status: client.settings.rawSetting.status ?? 'invisible',
-      });
-    }
-  }
-
-  /**
-   * @typedef {Object} OAuth2AuthorizeOptions
-   * @property {string} [guild_id] Guild ID
-   * @property {PermissionResolvable} [permissions] Permissions
-   * @property {boolean} [authorize] Whether to authorize or not
-   * @property {string} [code] 2FA Code
-   * @property {string} [webhook_channel_id] Webhook Channel ID
-   */
-
-  /**
-   * Authorize an application.
-   * @param {string} url Discord Auth URL
-   * @param {OAuth2AuthorizeOptions} options Oauth2 options
-   * @returns {Promise<Object>}
-   * @example
-   * client.authorizeURL(`https://discord.com/api/oauth2/authorize?client_id=botID&permissions=8&scope=applications.commands%20bot`, {
-      guild_id: "guildID",
-      permissions: "62221393", // your permissions
-      authorize: true
-    })
-   */
-  authorizeURL(url, options = { authorize: true, permissions: '0' }) {
-    const pathnameAPI = /\/api\/(v\d{1,2}\/)?oauth2\/authorize/;
-    const pathnameURL = /\/oauth2\/authorize/;
-    const url_ = new URL(url);
-    if (
-      !['discord.com', 'canary.discord.com', 'ptb.discord.com'].includes(url_.hostname) ||
-      (!pathnameAPI.test(url_.pathname) && !pathnameURL.test(url_.pathname))
-    ) {
-      throw new Error('INVALID_URL', url);
-    }
-    const searchParams = Object.fromEntries(url_.searchParams);
-    options.permissions = `${Permissions.resolve(searchParams.permissions || options.permissions) || 0}`;
-    delete searchParams.permissions;
-    return this.api.oauth2.authorize.post({
-      query: searchParams,
-      data: options,
-    });
-  }
-
-  /**
-   * Makes waiting time for Client.
-   * @param {number} miliseconds Sleeping time as milliseconds.
-   * @returns {Promise<void> | null}
-   */
-  sleep(miliseconds) {
-    return typeof miliseconds === 'number' ? new Promise(r => setTimeout(r, miliseconds).unref()) : null;
-  }
-
-  /**
    * Validates the client options.
    * @param {ClientOptions} [options=this.options] Options to validate
    * @private
    */
   _validateOptions(options = this.options) {
-    if (typeof options.intents === 'undefined') {
-      throw new TypeError('CLIENT_MISSING_INTENTS');
-    } else {
-      options.intents = Intents.resolve(options.intents);
-    }
-    if (options && typeof options.checkUpdate !== 'boolean') {
-      throw new TypeError('CLIENT_INVALID_OPTION', 'checkUpdate', 'a boolean');
-    }
-    if (options && typeof options.syncStatus !== 'boolean') {
-      throw new TypeError('CLIENT_INVALID_OPTION', 'syncStatus', 'a boolean');
-    }
-    if (options && typeof options.autoRedeemNitro !== 'boolean') {
-      throw new TypeError('CLIENT_INVALID_OPTION', 'autoRedeemNitro', 'a boolean');
-    }
-    if (options && options.captchaService && !captchaServices.includes(options.captchaService)) {
-      throw new TypeError('CLIENT_INVALID_OPTION', 'captchaService', captchaServices.join(', '));
-    }
-    // Parse captcha key
-    if (options && captchaServices.includes(options.captchaService) && options.captchaService !== 'custom') {
-      if (typeof options.captchaKey !== 'string') {
-        throw new TypeError('CLIENT_INVALID_OPTION', 'captchaKey', 'a string');
-      }
-      switch (options.captchaService) {
-        case '2captcha':
-          if (options.captchaKey.length !== 32) {
-            throw new TypeError('CLIENT_INVALID_OPTION', 'captchaKey', 'a 32 character string');
-          }
-          break;
-        case 'capmonster':
-          if (options.captchaKey.length !== 32) {
-            throw new TypeError('CLIENT_INVALID_OPTION', 'captchaKey', 'a 32 character string');
-          }
-          break;
-        case 'nopecha': {
-          if (options.captchaKey.length !== 16) {
-            throw new TypeError('CLIENT_INVALID_OPTION', 'captchaKey', 'a 16 character string');
-          }
-          break;
-        }
-      }
-    }
-    if (typeof options.captchaRetryLimit !== 'number' || isNaN(options.captchaRetryLimit)) {
-      throw new TypeError('CLIENT_INVALID_OPTION', 'captchaRetryLimit', 'a number');
-    }
-    if (options && typeof options.captchaSolver !== 'function') {
-      throw new TypeError('CLIENT_INVALID_OPTION', 'captchaSolver', 'a function');
-    }
-    if (options && typeof options.captchaWithProxy !== 'boolean') {
-      throw new TypeError('CLIENT_INVALID_OPTION', 'captchaWithProxy', 'a boolean');
-    }
-    if (options && typeof options.DMSync !== 'boolean') {
-      throw new TypeError('CLIENT_INVALID_OPTION', 'DMSync', 'a boolean');
-    }
-    if (options && typeof options.patchVoice !== 'boolean') {
-      throw new TypeError('CLIENT_INVALID_OPTION', 'patchVoice', 'a boolean');
-    }
-    if (options && options.password && typeof options.password !== 'string') {
-      throw new TypeError('CLIENT_INVALID_OPTION', 'password', 'a string');
-    }
-    if (options && options.usingNewAttachmentAPI && typeof options.usingNewAttachmentAPI !== 'boolean') {
-      throw new TypeError('CLIENT_INVALID_OPTION', 'usingNewAttachmentAPI', 'a boolean');
-    }
-    if (options && options.interactionTimeout && typeof options.interactionTimeout !== 'number') {
-      throw new TypeError('CLIENT_INVALID_OPTION', 'interactionTimeout', 'a number');
-    }
-    if (options && typeof options.proxy !== 'string') {
-      throw new TypeError('CLIENT_INVALID_OPTION', 'proxy', 'a string');
-    } else if (
-      options &&
-      options.proxy &&
-      typeof options.proxy === 'string' &&
-      testImportModule('proxy-agent') === false
-    ) {
-      throw new Error('MISSING_MODULE', 'proxy-agent', 'npm install proxy-agent');
-    }
-    if (typeof options.shardCount !== 'number' || isNaN(options.shardCount) || options.shardCount < 1) {
-      throw new TypeError('CLIENT_INVALID_OPTION', 'shardCount', 'a number greater than or equal to 1');
-    }
-    if (options.shards && !(options.shards === 'auto' || Array.isArray(options.shards))) {
-      throw new TypeError('CLIENT_INVALID_OPTION', 'shards', "'auto', a number or array of numbers");
-    }
-    if (options.shards && !options.shards.length) throw new RangeError('CLIENT_INVALID_PROVIDED_SHARDS');
     if (typeof options.makeCache !== 'function') {
       throw new TypeError('CLIENT_INVALID_OPTION', 'makeCache', 'a function');
     }
@@ -1069,11 +825,11 @@ class Client extends BaseClient {
     if (!Array.isArray(options.partials)) {
       throw new TypeError('CLIENT_INVALID_OPTION', 'partials', 'an Array');
     }
+    if (typeof options.DMChannelVoiceStatusSync !== 'number' || isNaN(options.DMChannelVoiceStatusSync)) {
+      throw new TypeError('CLIENT_INVALID_OPTION', 'DMChannelVoiceStatusSync', 'a number');
+    }
     if (typeof options.waitGuildTimeout !== 'number' || isNaN(options.waitGuildTimeout)) {
       throw new TypeError('CLIENT_INVALID_OPTION', 'waitGuildTimeout', 'a number');
-    }
-    if (typeof options.messageCreateEventGuildTimeout !== 'number' || isNaN(options.messageCreateEventGuildTimeout)) {
-      throw new TypeError('CLIENT_INVALID_OPTION', 'messageCreateEventGuildTimeout', 'a number');
     }
     if (typeof options.restWsBridgeTimeout !== 'number' || isNaN(options.restWsBridgeTimeout)) {
       throw new TypeError('CLIENT_INVALID_OPTION', 'restWsBridgeTimeout', 'a number');
@@ -1093,15 +849,16 @@ class Client extends BaseClient {
     if (typeof options.failIfNotExists !== 'boolean') {
       throw new TypeError('CLIENT_INVALID_OPTION', 'failIfNotExists', 'a boolean');
     }
-    if (!Array.isArray(options.userAgentSuffix)) {
-      throw new TypeError('CLIENT_INVALID_OPTION', 'userAgentSuffix', 'an array of strings');
-    }
     if (
       typeof options.rejectOnRateLimit !== 'undefined' &&
       !(typeof options.rejectOnRateLimit === 'function' || Array.isArray(options.rejectOnRateLimit))
     ) {
       throw new TypeError('CLIENT_INVALID_OPTION', 'rejectOnRateLimit', 'an array or a function');
     }
+    // Hardcode
+    this.options.shardCount = 1;
+    this.options.shards = [0];
+    this.options.intents = Intents.ALL;
   }
 }
 

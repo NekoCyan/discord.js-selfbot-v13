@@ -4,19 +4,23 @@ const process = require('node:process');
 const { Collection } = require('@discordjs/collection');
 const Base = require('./Base');
 const BaseMessageComponent = require('./BaseMessageComponent');
-const ClientApplication = require('./ClientApplication');
-const InteractionCollector = require('./InteractionCollector');
 const MessageAttachment = require('./MessageAttachment');
-const MessageButton = require('./MessageButton');
 const Embed = require('./MessageEmbed');
 const Mentions = require('./MessageMentions');
 const MessagePayload = require('./MessagePayload');
-const MessageSelectMenu = require('./MessageSelectMenu');
+const { Poll } = require('./Poll');
 const ReactionCollector = require('./ReactionCollector');
 const { Sticker } = require('./Sticker');
+const Application = require('./interfaces/Application');
 const { Error } = require('../errors');
 const ReactionManager = require('../managers/ReactionManager');
-const { InteractionTypes, MessageTypes, SystemMessageTypes, MaxBulkDeletableMessageAge } = require('../util/Constants');
+const {
+  InteractionTypes,
+  MessageTypes,
+  SystemMessageTypes,
+  MessageComponentTypes,
+  MessageReferenceTypes,
+} = require('../util/Constants');
 const MessageFlags = require('../util/MessageFlags');
 const Permissions = require('../util/Permissions');
 const SnowflakeUtil = require('../util/SnowflakeUtil');
@@ -75,7 +79,7 @@ class Message extends Base {
      * The timestamp the message was sent at
      * @type {number}
      */
-    this.createdTimestamp = SnowflakeUtil.timestampFrom(this.id);
+    this.createdTimestamp = this.id ? SnowflakeUtil.timestampFrom(this.id) : new Date(data.timestamp).getTime();
 
     if ('type' in data) {
       /**
@@ -253,12 +257,22 @@ class Message extends Base {
       this.webhookId ??= null;
     }
 
+    if (data.poll) {
+      /**
+       * The poll that was sent with the message
+       * @type {?Poll}
+       */
+      this.poll = new Poll(this.client, data.poll, this);
+    } else {
+      this.poll ??= null;
+    }
+
     if ('application' in data) {
       /**
        * Supplemental application information for group activities
-       * @type {?ClientApplication}
+       * @type {?Application}
        */
-      this.groupActivityApplication = new ClientApplication(this.client, data.application);
+      this.groupActivityApplication = new Application(this.client, data.application);
     } else {
       this.groupActivityApplication ??= null;
     }
@@ -319,6 +333,7 @@ class Message extends Base {
      * @property {Snowflake} channelId The channel's id the message was referenced
      * @property {?Snowflake} guildId The guild's id the message was referenced
      * @property {?Snowflake} messageId The message's id that was referenced
+     * @property {MessageReferenceType} type The type of the message reference
      */
 
     if ('message_reference' in data) {
@@ -330,6 +345,7 @@ class Message extends Base {
         channelId: data.message_reference.channel_id,
         guildId: data.message_reference.guild_id,
         messageId: data.message_reference.message_id,
+        type: MessageReferenceTypes[data.message_reference.type ?? 0],
       };
     } else {
       this.reference ??= null;
@@ -362,6 +378,53 @@ class Message extends Base {
       };
     } else {
       this.interaction ??= null;
+    }
+
+    if (data.message_snapshots) {
+      /**
+       * The message associated with the message reference
+       * @type {Collection<Snowflake, Message>}
+       */
+      this.messageSnapshots = data.message_snapshots.reduce((coll, snapshot) => {
+        const channel = this.client.channels.cache.get(this.reference.channelId);
+        const snapshotData = {
+          ...snapshot.message,
+          id: this.reference.messageId,
+          channel_id: this.reference.channelId,
+          guild_id: this.reference.guildId,
+        };
+
+        return coll.set(
+          this.reference.messageId,
+          channel ? channel.messages._add(snapshotData) : new this.constructor(this.client, snapshotData),
+        );
+      }, new Collection());
+    } else {
+      this.messageSnapshots ??= new Collection();
+    }
+
+    /**
+     * A call associated with a message
+     * @typedef {Object} MessageCall
+     * @property {Readonly<?Date>} endedAt The time the call ended
+     * @property {?number} endedTimestamp The timestamp the call ended
+     * @property {Snowflake[]} participants The ids of the users that participated in the call
+     */
+
+    if (data.call) {
+      /**
+       * The call associated with the message
+       * @type {?MessageCall}
+       */
+      this.call = {
+        endedTimestamp: data.call.ended_timestamp ? Date.parse(data.call.ended_timestamp) : null,
+        participants: data.call.participants,
+        get endedAt() {
+          return this.endedTimestamp && new Date(this.endedTimestamp);
+        },
+      };
+    } else {
+      this.call ??= null;
     }
   }
 
@@ -401,7 +464,7 @@ class Message extends Base {
    * @readonly
    */
   get channel() {
-    return this.client.channels.resolve(this.channelId);
+    return this.client.channels.cache.get(this.channelId) ?? null;
   }
 
   /**
@@ -447,7 +510,7 @@ class Message extends Base {
    * @readonly
    */
   get guild() {
-    return this.client.guilds.resolve(this.guildId) ?? this.channel?.guild ?? null;
+    return this.client.guilds.cache.get(this.guildId) ?? this.channel?.guild ?? null;
   }
 
   /**
@@ -467,7 +530,7 @@ class Message extends Base {
    * @readonly
    */
   get thread() {
-    return this.channel?.threads?.resolve(this.id) ?? null;
+    return this.channel?.threads?.cache.get(this.id) ?? null;
   }
 
   /**
@@ -487,7 +550,7 @@ class Message extends Base {
    */
   get cleanContent() {
     // eslint-disable-next-line eqeqeq
-    return this.content != null ? Util.cleanContent(this.content, this.channel) : null;
+    return this.content != null && this.channel ? Util.cleanContent(this.content, this.channel) : null;
   }
 
   /**
@@ -529,65 +592,6 @@ class Message extends Base {
       collector.once('end', (reactions, reason) => {
         if (options.errors?.includes(reason)) reject(reactions);
         else resolve(reactions);
-      });
-    });
-  }
-
-  /**
-   * @typedef {CollectorOptions} MessageComponentCollectorOptions
-   * @property {MessageComponentType} [componentType] The type of component to listen for
-   * @property {number} [max] The maximum total amount of interactions to collect
-   * @property {number} [maxComponents] The maximum number of components to collect
-   * @property {number} [maxUsers] The maximum number of users to interact
-   */
-
-  /**
-   * Creates a message component interaction collector.
-   * @param {MessageComponentCollectorOptions} [options={}] Options to send to the collector
-   * @returns {InteractionCollector}
-   * @example
-   * // Create a message component interaction collector
-   * const filter = (interaction) => interaction.customId === 'button' && interaction.user.id === 'someId';
-   * const collector = message.createMessageComponentCollector({ filter, time: 15_000 });
-   * collector.on('collect', i => console.log(`Collected ${i.customId}`));
-   * collector.on('end', collected => console.log(`Collected ${collected.size} items`));
-   */
-  createMessageComponentCollector(options = {}) {
-    return new InteractionCollector(this.client, {
-      ...options,
-      interactionType: InteractionTypes.MESSAGE_COMPONENT,
-      message: this,
-    });
-  }
-
-  /**
-   * An object containing the same properties as CollectorOptions, but a few more:
-   * @typedef {Object} AwaitMessageComponentOptions
-   * @property {CollectorFilter} [filter] The filter applied to this collector
-   * @property {number} [time] Time to wait for an interaction before rejecting
-   * @property {MessageComponentType} [componentType] The type of component interaction to collect
-   */
-
-  /**
-   * Collects a single component interaction that passes the filter.
-   * The Promise will reject if the time expires.
-   * @param {AwaitMessageComponentOptions} [options={}] Options to pass to the internal collector
-   * @returns {Promise<MessageComponentInteraction>}
-   * @example
-   * // Collect a message component interaction
-   * const filter = (interaction) => interaction.customId === 'button' && interaction.user.id === 'someId';
-   * message.awaitMessageComponent({ filter, time: 15_000 })
-   *   .then(interaction => console.log(`${interaction.customId} was clicked!`))
-   *   .catch(console.error);
-   */
-  awaitMessageComponent(options = {}) {
-    const _options = { ...options, max: 1 };
-    return new Promise((resolve, reject) => {
-      const collector = this.createMessageComponentCollector(_options);
-      collector.once('end', (interactions, reason) => {
-        const interaction = interactions.first();
-        if (interaction) resolve(interaction);
-        else reject(new Error('INTERACTION_COLLECTOR_ERROR', reason));
       });
     });
   }
@@ -653,14 +657,7 @@ class Message extends Base {
    * channel.bulkDelete(messages.filter(message => message.bulkDeletable));
    */
   get bulkDeletable() {
-    return (
-      (this.inGuild() &&
-        this.client.user.bot &&
-        Date.now() - this.createdTimestamp < MaxBulkDeletableMessageAge &&
-        this.deletable &&
-        this.channel?.permissionsFor(this.client.user).has(Permissions.FLAGS.MANAGE_MESSAGES, false)) ??
-      false
-    );
+    return false;
   }
 
   /**
@@ -686,6 +683,7 @@ class Message extends Base {
   async fetchReference() {
     if (!this.reference) throw new Error('MESSAGE_REFERENCE_MISSING');
     const { channelId, messageId } = this.reference;
+    if (!messageId) throw new Error('MESSAGE_REFERENCE_MISSING');
     const channel = this.client.channels.resolve(channelId);
     if (!channel) throw new Error('GUILD_CHANNEL_RESOLVE');
     const message = await channel.messages.fetch(messageId);
@@ -706,6 +704,7 @@ class Message extends Base {
       channel?.type === 'GUILD_NEWS' &&
         !this.flags.has(MessageFlags.FLAGS.CROSSPOSTED) &&
         this.type === 'DEFAULT' &&
+        !this.poll &&
         channel.viewable &&
         channel.permissionsFor(this.client.user)?.has(bitfield, false) &&
         !deletedMessages.has(this),
@@ -722,7 +721,7 @@ class Message extends Base {
    * @property {MessageAttachment[]} [attachments] An array of attachments to keep,
    * all attachments will be kept if omitted
    * @property {FileOptions[]|BufferResolvable[]|MessageAttachment[]} [files] Files to add to the message
-   * @property {Array<(MessageActionRow|MessageActionRowOptions)>} [components]
+   * @property {MessageActionRow[]|MessageActionRowOptions[]} [components]
    * Action rows containing interactive components for the message (buttons, select menus)
    */
 
@@ -792,7 +791,7 @@ class Message extends Base {
   /**
    * Adds a reaction to the message.
    * @param {EmojiIdentifierResolvable} emoji The emoji to react with
-   * @param {boolean} [burst=false] Super Reactions (Discord Nitro only)
+   * @param {boolean} [burst=false] Super Reactions
    * @returns {Promise<MessageReaction>}
    * @example
    * // React to a message with a unicode emoji
@@ -811,9 +810,9 @@ class Message extends Base {
 
     return this.client.actions.MessageReactionAdd.handle(
       {
-        user: this.client.user,
-        channel: this.channel,
-        message: this,
+        [this.client.actions.injectedUser]: this.client.user,
+        [this.client.actions.injectedChannel]: this.channel,
+        [this.client.actions.injectedMessage]: this,
         emoji: Util.resolvePartialEmoji(emoji),
         me_burst: burst,
       },
@@ -872,6 +871,29 @@ class Message extends Base {
   }
 
   /**
+   * Forwards this message to a channel.
+   * @param {TextBasedChannelResolvable} channel The channel to forward the message to
+   * @returns {Promise<Message>}
+   */
+  forward(channel) {
+    channel = this.client.channels.resolve(channel);
+    if (!channel || !this.channelId) return Promise.reject(new Error('CHANNEL_NOT_CACHED'));
+    const data = MessagePayload.create(
+      this,
+      {},
+      {
+        forward: {
+          channel_id: this.channelId,
+          guild_id: this.guildId,
+          message_id: this.id,
+          type: 1,
+        },
+      },
+    );
+    return channel.send(data);
+  }
+
+  /**
    * A number that is allowed to be the duration (in minutes) of inactivity after which a thread is automatically
    * archived. This can be:
    * * `60` (1 hour)
@@ -906,6 +928,27 @@ class Message extends Base {
     }
     if (this.hasThread) return Promise.reject(new Error('MESSAGE_EXISTING_THREAD'));
     return this.channel.threads.create({ ...options, startMessage: this });
+  }
+
+  /**
+   * Submits a poll vote for the current user. Returns a 204 empty response on success.
+   * @param  {...number[]} ids ID of the answer
+   * @returns {Promise<void>}
+   * @example
+   * // Vote multi choices
+   * message.vote(1,2);
+   * // Remove vote
+   * message.vote();
+   */
+  vote(...ids) {
+    return this.client.api
+      .channels(this.channel.id)
+      .polls(this.id)
+      .answers['@me'].put({
+        data: {
+          answer_ids: ids.flat(1).map(value => value.toString()),
+        },
+      });
   }
 
   /**
@@ -982,7 +1025,9 @@ class Message extends Base {
       this.tts === message.tts &&
       this.nonce === message.nonce &&
       this.embeds.length === message.embeds.length &&
-      this.attachments.length === message.attachments.length;
+      this.attachments.size === message.attachments.size &&
+      this.attachments.every(attachment => message.attachments.has(attachment.id)) &&
+      this.embeds.every((embed, index) => embed.equals(message.embeds[index]));
 
     if (equal && rawData) {
       equal =
@@ -1024,163 +1069,205 @@ class Message extends Base {
       reactions: false,
     });
   }
-  // Added
+
+  // TypeScript
   /**
-   * Marks the message as unread.
-   * @returns {Promise<boolean>}
+   * Check data
+   * @type {boolean}
+   * @readonly
    */
-  async markUnread() {
-    await this.client.api.channels[this.channelId].messages[this.id].ack.post({
-      data: {
-        manual: true,
-        mention_count:
-          this.mentions.everyone ||
-          this.mentions.repliedUser?.id === this.client.user.id ||
-          this.mentions.users.has(this.client.user.id) ||
-          (this.guildId && this.mentions.roles.some(r => this.guild.members.me._roles?.includes(r.id)))
-            ? 1
-            : 0,
-      },
-    });
+  get isMessage() {
     return true;
   }
 
   /**
-   * Marks the message as read.
-   * @returns {Promise<boolean>}
-   */
-  async markRead() {
-    await this.client.api.channels[this.channelId].messages[this.id].ack.post({
-      data: {
-        token: null,
-      },
-    });
-    return true;
-  }
-
-  /**
+   * Click specific button with X and Y
    * @typedef {Object} MessageButtonLocation
-   * @property {number} row Index of the row
-   * @property {number} col Index of the column
+   * @property {number} X Index of the row
+   * @property {number} Y Index of the column
    */
 
   /**
    * Click specific button or automatically click first button if no button is specified.
-   * @param {MessageButton|MessageButtonLocation|string} button Button ID
-   * @returns {Promise<InteractionResponse>}
+   * @param {MessageButtonLocation|string|undefined} button button
+   * @returns {Promise<Message|Modal>}
    * @example
-   * client.on('messageCreate', async message => {
-   *  if (message.components.length) {
-   *    // Find first button and click it
-   *    await message.clickButton();
-   *    // Click with button ID
-   *    await message.clickButton('button-id');
-   *    // Click with button location
-   *    await message.clickButton({ row: 0, col: 0 });
-   *    // Click with class MessageButton
-   *    const button = message.components[0].components[0];
-   *    await message.clickButton(button);
-   *    // Click with class MessageButton (2)
-   *    button.click(message);
-   *  }
+   * // Demo msg
+   * Some content
+   *  ――――――――――――――――――――――――――――――――> X from 0
+   *  │ [button1] [button2] [button3]
+   *  │ [button4] [button5] [button6]
+   *  ↓
+   *  Y from 0
+   * // Click button6 with X and Y
+   * [0,0] [1,0] [2,0]
+   * [0,1] [1,1] [2,1]
+   * // Code
+   * message.clickButton({
+   *  X: 2, Y: 1,
    * });
+   * // Click button with customId (Ex button 5)
+   * message.clickButton('button5');
+   * // Click button 1
+   * message.clickButton();
    */
   clickButton(button) {
-    if (!button) {
-      button = this.components.flatMap(row => row.components).find(b => b.type === 'BUTTON')?.customId;
-    } else if (button instanceof MessageButton) {
-      button = button.customId;
-    } else if (typeof button === 'object') {
-      if (!('row' in button) || !('col' in button)) throw new TypeError('INVALID_BUTTON_LOCATION');
-      button = this.components[button.row]?.components[button.col]?.customId;
+    if (typeof button == 'undefined') {
+      button = this.components
+        .flatMap(row => row.components)
+        .find(b => b.type === 'BUTTON' && b.customId && !b.disabled);
+    } else if (typeof button == 'string') {
+      button = this.components.flatMap(row => row.components).find(b => b.type === 'BUTTON' && b.customId == button);
+    } else {
+      button = this.components[button.Y]?.components[button.X];
     }
     if (!button) throw new TypeError('BUTTON_NOT_FOUND');
-    button = this.components.flatMap(row => row.components).find(b => b.customId === button && b.type === 'BUTTON');
-    return button ? button.click(this) : Promise.reject(new TypeError('BUTTON_NOT_FOUND'));
+    button = button.toJSON();
+    if (!button.custom_id || button.disabled) throw new TypeError('BUTTON_CANNOT_CLICK');
+    const nonce = SnowflakeUtil.generate();
+    const data = {
+      type: InteractionTypes.MESSAGE_COMPONENT,
+      nonce,
+      guild_id: this.guildId,
+      channel_id: this.channelId,
+      message_id: this.id,
+      application_id: this.applicationId ?? this.author.id,
+      session_id: this.client.sessionId,
+      message_flags: this.flags.bitfield,
+      data: {
+        component_type: MessageComponentTypes.BUTTON,
+        custom_id: button.custom_id,
+      },
+    };
+    this.client.api.interactions.post({
+      data,
+    });
+    return Util.createPromiseInteraction(this.client, nonce, 5_000, true, this);
   }
+
   /**
-   * Select specific menu or First Menu
-   * @param {MessageSelectMenu|string|number|Array<any>} menuID MenuId / MessageSelectMenu / Row of Menu / Array of Values (first menu)
-   * @param {Array<any>} options Array of Values
-   * @returns {Promise<InteractionResponse>}
-   * @example
-   * client.on('messageCreate', async message => {
-   *  if (message.components.length) {
-   *    // Row
-   *    await message.selectMenu(1, [message.channel]); // row 1, type: Channel, multi: false
-   *    // Id
-   *    await message.selectMenu('menu-id', ['uid1', client.user, message.member]); // MenuId, type: User, multi: true
-   *    // First Menu
-   *    await message.selectMenu(['role-id']); // First Menu, type: role, multi: false
-   *    // class MessageSelectMenu
-   *    const menu = message.components[0].components[0];
-   *    await message.selectMenu(menu, ['option1', 'option2']);
-   *    // MessageSelectMenu (2)
-   *    menu.select(message, ['option1', 'option2']);
-   *  }
-   * });
+   * Select specific menu
+   * @param {number|string} menu Target
+   * @param {Array<UserResolvable | RoleResolvable | ChannelResolvable | string>} values Any value
+   * @returns {Promise<Message|Modal>}
    */
-  selectMenu(menuID, options = []) {
-    if (!this.components[0]) throw new TypeError('MESSAGE_NO_COMPONENTS');
-    if (menuID instanceof MessageSelectMenu) {
-      //
-    } else if (/[0-4]/.test(menuID)) {
-      menuID = this.components[menuID]?.components[0];
-    } else {
-      const menuAll = this.components
+  selectMenu(menu, values = []) {
+    let selectMenu = menu;
+    if (/[0-4]/.test(menu)) {
+      selectMenu = this.components[menu]?.components[0];
+    } else if (typeof menu == 'string') {
+      selectMenu = this.components
         .flatMap(row => row.components)
-        .filter(b =>
-          [
-            'STRING_SELECT',
-            'USER_SELECT',
-            'ROLE_SELECT',
-            'MENTIONABLE_SELECT',
-            'CHANNEL_SELECT',
-            'SELECT_MENU',
-          ].includes(b.type),
+        .find(
+          b =>
+            ['STRING_SELECT', 'USER_SELECT', 'ROLE_SELECT', 'MENTIONABLE_SELECT', 'CHANNEL_SELECT'].includes(b.type) &&
+            b.customId == menu &&
+            !b.disabled,
         );
-      if (menuAll.length == 0) throw new TypeError('MENU_NOT_FOUND');
-      if (menuID) {
-        menuID = menuAll.find(b => b.customId === menuID);
-      } else {
-        menuID = menuAll[0];
+    }
+    if (values.length < selectMenu.minValues) {
+      throw new RangeError(`[SELECT_MENU_MIN_VALUES] The minimum number of values is ${selectMenu.minValues}`);
+    }
+    if (values.length > selectMenu?.maxValues) {
+      throw new RangeError(`[SELECT_MENU_MAX_VALUES] The maximum number of values is ${selectMenu.maxValues}`);
+    }
+    values = values.map(value => {
+      switch (selectMenu.type) {
+        case 'STRING_SELECT': {
+          return selectMenu.options.find(obj => obj.value === value || obj.label === value).value;
+        }
+        case 'USER_SELECT': {
+          return this.client.users.resolveId(value);
+        }
+        case 'ROLE_SELECT': {
+          return this.guild.roles.resolveId(value);
+        }
+        case 'MENTIONABLE_SELECT': {
+          return this.client.users.resolveId(value) || this.guild.roles.resolveId(value);
+        }
+        case 'CHANNEL_SELECT': {
+          return this.client.channels.resolveId(value);
+        }
+        default: {
+          return value;
+        }
       }
-    }
-    if (!menuID.type.includes('SELECT')) throw new TypeError('MENU_NOT_FOUND');
-    return menuID.select(this, Array.isArray(menuID) ? menuID : options);
+    });
+    const nonce = SnowflakeUtil.generate();
+    const data = {
+      type: InteractionTypes.MESSAGE_COMPONENT,
+      guild_id: this.guildId,
+      channel_id: this.channelId,
+      message_id: this.id,
+      application_id: this.applicationId ?? this.author.id,
+      session_id: this.client.sessionId,
+      message_flags: this.flags.bitfield,
+      data: {
+        component_type: MessageComponentTypes[selectMenu.type],
+        custom_id: selectMenu.customId,
+        type: MessageComponentTypes[selectMenu.type],
+        values,
+      },
+      nonce,
+    };
+    this.client.api.interactions.post({
+      data,
+    });
+    return Util.createPromiseInteraction(this.client, nonce, 5_000, true, this);
   }
-  //
+
   /**
-   * Send context Menu v2
-   * @param {Snowflake} botId Bot id
-   * @param {string} commandName Command name in Context Menu
-   * @returns {Promise<InteractionResponse>}
+   * Marks the message as unread.
+   * @returns {Promise<void>}
    */
-  async contextMenu(botId, commandName) {
-    if (!botId) throw new Error('Bot ID is required');
-    const user = await this.client.users.fetch(botId).catch(() => {});
-    if (!user || !user.bot || !user.application) {
-      throw new Error('BotID is not a bot or does not have an application slash command');
-    }
-    if (!commandName || typeof commandName !== 'string') {
-      throw new Error('Command name is required');
-    }
-    let contextCMD;
-    const data = await this.channel.searchInteraction(botId, 'MESSAGE');
-    for (const command of data.application_commands) {
-      user.application?.commands?._add(command, true);
-    }
-    contextCMD = user.application?.commands?.cache.find(c => c.name == commandName && c.type === 'MESSAGE');
-    if (!contextCMD) {
-      throw new Error(
-        'INTERACTION_SEND_FAILURE',
-        `Command ${commandName} is not found (with search)\nList command avalible: ${user.application?.commands?.cache
-          .filter(a => a.type == 'MESSAGE')
-          .map(a => a.name)
-          .join(', ')}`,
-      );
-    }
-    return contextCMD.sendContextMenu(this, true);
+  markUnread() {
+    return this.client.api.channels[this.channelId].messages[this.id].ack.post({
+      data: {
+        manual: true,
+        mention_count: 1,
+      },
+    });
+  }
+
+  /**
+   * Marks the message as read.
+   * @returns {Promise<void>}
+   */
+  markRead() {
+    return this.client.api.channels[this.channelId].messages[this.id].ack.post({
+      data: {
+        token: null,
+      },
+    });
+  }
+
+  /**
+   * Report Message
+   * @param {Arrray<number>} breadcrumbs Options for reporting
+   * @param {Object} [elements={}] Metadata
+   * @returns {Promise<{ report_id: Snowflake }>}
+   * @example
+   * // GET https://discord.com/api/v9/reporting/menu/message?variant=4
+   * // Report Category
+   * // - <hidden>MESSAGE_WELCOME (3)</hidden>
+   * // - Something else (28)
+   * // - Hacks, cheats, phishing or malicious links (72)
+   * message.report([3, 28, 72]).then(console.log);
+   * // { "report_id": "1199663489988440124" }
+   */
+  report(breadcrumbs, elements = {}) {
+    return this.client.api.reporting.message.post({
+      data: {
+        version: '1.0',
+        variant: '4',
+        language: 'en',
+        breadcrumbs,
+        elements,
+        channel_id: this.channelId,
+        message_id: this.id,
+        name: 'message',
+      },
+    });
   }
 }
 

@@ -113,22 +113,22 @@ class ChannelManager extends CachedManager {
     }
 
     const data = await this.client.api.channels(id).get();
-    // Delete in cache
-    this._remove(id);
     return this._add(data, null, { cache, allowUnknownGuild });
   }
+
   /**
    * Create Group DM
-   * @param {UserResolvable[]} recipients Array of recipients
-   * @returns {Promise<PartialGroupDMChannel>} Channel
+   * @param {UserResolvable[]} [recipients=[]] Array of recipients
+   * @returns {Promise<GroupDMChannel>} Channel
+   * @example
+   * client.channels.createGroupDM();
    */
-  async createGroupDM(recipients) {
-    // Check
+  async createGroupDM(recipients = []) {
     if (!Array.isArray(recipients)) throw new Error(`Expected an array of recipients (got ${typeof recipients})`);
     recipients = recipients
       .map(r => this.client.users.resolveId(r))
       .filter(r => r && this.client.relationships.cache.get(r) == RelationshipTypes.FRIEND);
-    if (recipients.length < 2 || recipients.length > 9) throw new Error('Invalid Users length (2 - 9)');
+    if (recipients.length == 1 || recipients.length > 9) throw new Error('Invalid Users length (max=9)');
     const data = await this.client.api.users['@me'].channels.post({
       data: { recipients },
     });

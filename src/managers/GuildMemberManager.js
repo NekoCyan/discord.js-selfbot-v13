@@ -1,10 +1,9 @@
+/* eslint-disable newline-per-chained-call */
 'use strict';
 
 const { Buffer } = require('node:buffer');
 const { setTimeout } = require('node:timers');
 const { Collection } = require('@discordjs/collection');
-require('lodash.permutations');
-const _ = require('lodash');
 const CachedManager = require('./CachedManager');
 const { Error, TypeError, RangeError } = require('../errors');
 const BaseGuildVoiceChannel = require('../structures/BaseGuildVoiceChannel');
@@ -56,8 +55,8 @@ class GuildMemberManager extends CachedManager {
   resolve(member) {
     const memberResolvable = super.resolve(member);
     if (memberResolvable) return memberResolvable;
-    const userResolvable = this.client.users.resolveId(member);
-    if (userResolvable) return super.resolve(userResolvable);
+    const userId = this.client.users.resolveId(member);
+    if (userId) return this.cache.get(userId) ?? null;
     return null;
   }
 
@@ -69,8 +68,8 @@ class GuildMemberManager extends CachedManager {
   resolveId(member) {
     const memberResolvable = super.resolveId(member);
     if (memberResolvable) return memberResolvable;
-    const userResolvable = this.client.users.resolveId(member);
-    return this.cache.has(userResolvable) ? userResolvable : null;
+    const userId = this.client.users.resolveId(member);
+    return this.cache.has(userId) ? userId : null;
   }
 
   /**
@@ -130,7 +129,7 @@ class GuildMemberManager extends CachedManager {
    */
   get me() {
     return (
-      this.resolve(this.client.user.id) ??
+      this.cache.get(this.client.user.id) ??
       (this.client.options.partials.includes(PartialTypes.GUILD_MEMBER)
         ? this._add({ user: { id: this.client.user.id } }, true)
         : null)
@@ -191,25 +190,17 @@ class GuildMemberManager extends CachedManager {
    * guild.members.fetch({ query: 'hydra', limit: 1 })
    *   .then(console.log)
    *   .catch(console.error);
-   * @see {@link https://github.com/aiko-chan-ai/discord.js-selfbot-v13/blob/main/Document/FetchGuildMember.md}
    */
   fetch(options) {
-    if (!options || (typeof options === 'object' && !('user' in options) && !('query' in options))) {
+    if (!options) {
       if (
-        this.guild.members.me.permissions.has('KICK_MEMBERS') ||
-        this.guild.members.me.permissions.has('BAN_MEMBERS') ||
-        this.guild.members.me.permissions.has('MANAGE_ROLES')
+        this.me.permissions.has('KICK_MEMBERS') ||
+        this.me.permissions.has('BAN_MEMBERS') ||
+        this.me.permissions.has('MANAGE_ROLES')
       ) {
         return this._fetchMany();
-      } else if (this.guild.memberCount <= 10000) {
-        return this.fetchByMemberSafety();
       } else {
-        // NOTE: This is a very slow method, and can take up to 999+ minutes to complete.
-        this.fetchBruteforce({
-          delay: 50,
-          skipWarn: true,
-          depth: 1,
-        });
+        return this.fetchByMemberSafety();
       }
     }
     const user = this.client.users.resolveId(options);
@@ -472,221 +463,6 @@ class GuildMemberManager extends CachedManager {
   }
 
   /**
-   * Options used to fetch multiple members from a guild.
-   * @typedef {Object} BruteforceOptions
-   * @property {number} [limit=100] Maximum number of members per request
-   * @property {number} [delay=500] Timeout for new requests in ms
-   * @property {number} [depth=1] Permutations length
-   */
-
-  /**
-   * Fetches multiple members from the guild.
-   * @param {BruteforceOptions} options Options for the bruteforce
-   * @returns {Collection<Snowflake, GuildMember>} (All) members in the guild
-   * @see https://github.com/aiko-chan-ai/discord.js-selfbot-v13/blob/main/Document/FetchGuildMember.md
-   * @example
-   * guild.members.fetchBruteforce()
-   * .then(members => console.log(`Fetched ${members.size} members`))
-   * .catch(console.error);
-   */
-  fetchBruteforce(options = {}) {
-    const defaultQuery = 'abcdefghijklmnopqrstuvwxyz0123456789!"#$%&\'()*+,-./:;<=>?@[]^_`{|}~ ';
-    let dictionary;
-    let limit = 100;
-    let delay = 500;
-    let depth = 1;
-    if (options?.limit) limit = options?.limit;
-    if (options?.delay) delay = options?.delay;
-    if (options?.depth) depth = options?.depth;
-    if (typeof limit !== 'number') throw new TypeError('INVALID_TYPE', 'limit', 'Number');
-    if (limit < 1 || limit > 100) throw new RangeError('INVALID_RANGE_QUERY_MEMBER');
-    if (typeof delay !== 'number') throw new TypeError('INVALID_TYPE', 'delay', 'Number');
-    if (typeof depth !== 'number') throw new TypeError('INVALID_TYPE', 'depth', 'Number');
-    if (depth < 1) throw new RangeError('INVALID_RANGE_QUERY_MEMBER');
-    if (depth > 2) {
-      console.warn(`[WARNING] GuildMemberManager#fetchBruteforce: depth greater than 2, can lead to very slow speeds`);
-    }
-    if (delay < 500 && !options?.skipWarn) {
-      console.warn(
-        `[WARNING] GuildMemberManager#fetchBruteforce: delay is less than 500ms, this may cause rate limits.`,
-      );
-    }
-    let skipValues = [];
-    // eslint-disable-next-line no-async-promise-executor
-    return new Promise(async (resolve, reject) => {
-      for (let i = 1; i <= depth; i++) {
-        dictionary = _(defaultQuery)
-          .permutations(i)
-          .map(v => _.join(v, ''))
-          .value();
-        for (const query of dictionary) {
-          if (this.guild.members.cache.size >= this.guild.memberCount) break;
-          this.client.emit(
-            'debug',
-            `[INFO] GuildMemberManager#fetchBruteforce: Querying ${query}, Skip: [${skipValues.join(', ')}]`,
-          );
-          if (skipValues.some(v => query.startsWith(v))) continue;
-          await this._fetchMany({ query, limit })
-            .then(members => {
-              if (members.size === 0) skipValues.push(query);
-            })
-            .catch(reject);
-          await this.guild.client.sleep(delay);
-        }
-      }
-      resolve(this.guild.members.cache);
-    });
-  }
-
-  /**
-   * Experimental method to fetch members from the guild.
-   * <info>Lists up to 10000 members of the guild.</info>
-   * @param {number} [timeout=15_000] Timeout for receipt of members in ms
-   * @returns {Promise<Collection<Snowflake, GuildMember>>}
-   */
-  fetchByMemberSafety(timeout = 15_000) {
-    return new Promise(resolve => {
-      const nonce = SnowflakeUtil.generate();
-      let timeout_ = setTimeout(() => {
-        this.client.removeListener(Events.GUILD_MEMBER_LIST_UPDATE, handler);
-        resolve(this.guild.members.cache);
-      }, timeout).unref();
-      const handler = (members, guild, raw) => {
-        if (guild.id == this.guild.id && raw.nonce == nonce) {
-          if (members.size > 0) {
-            this.client.ws.broadcast({
-              op: 35,
-              d: {
-                guild_id: this.guild.id,
-                query: '',
-                continuation_token: members.first()?.id,
-                nonce,
-              },
-            });
-          } else {
-            clearTimeout(timeout_);
-            this.client.removeListener(Events.GUILD_MEMBER_LIST_UPDATE, handler);
-            resolve(this.guild.members.cache);
-          }
-        }
-      };
-      this.client.on('guildMembersChunk', handler);
-      this.client.ws.broadcast({
-        op: 35,
-        d: {
-          guild_id: this.guild.id,
-          query: '',
-          continuation_token: null,
-          nonce,
-        },
-      });
-    });
-  }
-
-  /**
-   * Fetches multiple members from the guild in the channel.
-   * @param {GuildTextChannelResolvable} channel The channel to get members from (Members has VIEW_CHANNEL permission)
-   * @param {number} [offset=0] Start index of the members to get
-   * @param {boolean} [double=false] Whether to use double range
-   * @param {number} [retryMax=3] Number of retries
-   * @param {number} [time=10e3] Timeout for receipt of members
-   * @returns {Collection<Snowflake, GuildMember>} Members in the guild
-   * @see {@link https://github.com/aiko-chan-ai/discord.js-selfbot-v13/blob/main/Document/FetchGuildMember.md}
-   * @example
-   * const guild = client.guilds.cache.get('id');
-   * const channel = guild.channels.cache.get('id');
-   * // Overlap (slow)
-   * for (let index = 0; index <= guild.memberCount; index += 100) {
-   *   await guild.members.fetchMemberList(channel, index, index !== 100).catch(() => {});
-   *   await client.sleep(500);
-   * }
-   * // Non-overlap (fast)
-   * for (let index = 0; index <= guild.memberCount; index += 200) {
-   *   await guild.members.fetchMemberList(channel, index == 0 ? 100 : index, index !== 100).catch(() => {});
-   *   await client.sleep(500);
-   * }
-   * console.log(guild.members.cache.size); // will print the number of members in the guild
-   */
-  fetchMemberList(channel, offset = 0, double = false, retryMax = 3, time = 10_000) {
-    const channel_ = this.guild.channels.resolve(channel);
-    if (!channel_?.isText()) throw new TypeError('INVALID_TYPE', 'channel', 'GuildTextChannelResolvable');
-    if (typeof offset !== 'number') throw new TypeError('INVALID_TYPE', 'offset', 'Number');
-    if (typeof time !== 'number') throw new TypeError('INVALID_TYPE', 'time', 'Number');
-    if (typeof retryMax !== 'number') throw new TypeError('INVALID_TYPE', 'retryMax', 'Number');
-    if (retryMax < 1) throw new RangeError('INVALID_RANGE_RETRY');
-    if (typeof double !== 'boolean') throw new TypeError('INVALID_TYPE', 'double', 'Boolean');
-    // TODO: if (this.guild.large) throw new Error('GUILD_IS_LARGE');
-    return new Promise((resolve, reject) => {
-      const default_ = [[0, 99]];
-      const fetchedMembers = new Collection();
-      if (offset > 99) {
-        // eslint-disable-next-line no-unused-expressions
-        double
-          ? default_.push([offset, offset + 99], [offset + 100, offset + 199])
-          : default_.push([offset, offset + 99]);
-      }
-      let retry = 0;
-      const handler = (members, guild, type, raw) => {
-        timeout.refresh();
-        if (guild.id !== this.guild.id) return;
-        if (type == 'INVALIDATE' && offset > 100) {
-          if (retry < retryMax) {
-            this.guild.shard.send({
-              op: Opcodes.GUILD_SUBSCRIPTIONS,
-              d: {
-                guild_id: this.guild.id,
-                typing: true,
-                threads: true,
-                activities: true,
-                channels: {
-                  [channel_.id]: default_,
-                },
-                thread_member_lists: [],
-                members: [],
-              },
-            });
-            retry++;
-          } else {
-            clearTimeout(timeout);
-            this.client.removeListener(Events.GUILD_MEMBER_LIST_UPDATE, handler);
-            this.client.decrementMaxListeners();
-            reject(new Error('INVALIDATE_MEMBER', raw.ops[0].range));
-          }
-        } else {
-          for (const member of members.values()) {
-            fetchedMembers.set(member.id, member);
-          }
-          clearTimeout(timeout);
-          this.client.removeListener(Events.GUILD_MEMBER_LIST_UPDATE, handler);
-          this.client.decrementMaxListeners();
-          resolve(fetchedMembers);
-        }
-      };
-      const timeout = setTimeout(() => {
-        this.client.removeListener(Events.GUILD_MEMBER_LIST_UPDATE, handler);
-        this.client.decrementMaxListeners();
-        reject(new Error('GUILD_MEMBERS_TIMEOUT'));
-      }, time).unref();
-      this.client.incrementMaxListeners();
-      this.client.on(Events.GUILD_MEMBER_LIST_UPDATE, handler);
-      this.guild.shard.send({
-        op: Opcodes.GUILD_SUBSCRIPTIONS,
-        d: {
-          guild_id: this.guild.id,
-          typing: true,
-          threads: true,
-          activities: true,
-          channels: {
-            [channel_.id]: default_,
-          },
-          thread_member_lists: [],
-          members: [],
-        },
-      });
-    });
-  }
-
-  /**
    * Adds a role to a member.
    * @param {GuildMemberResolvable} user The user to add the role from
    * @param {RoleResolvable} role The role to add
@@ -694,7 +470,7 @@ class GuildMemberManager extends CachedManager {
    * @returns {Promise<GuildMember|User|Snowflake>}
    */
   async addRole(user, role, reason) {
-    const userId = this.guild.members.resolveId(user);
+    const userId = this.resolveId(user);
     const roleId = this.guild.roles.resolveId(role);
 
     await this.client.api.guilds(this.guild.id).members(userId).roles(roleId).put({ reason });
@@ -710,12 +486,61 @@ class GuildMemberManager extends CachedManager {
    * @returns {Promise<GuildMember|User|Snowflake>}
    */
   async removeRole(user, role, reason) {
-    const userId = this.guild.members.resolveId(user);
+    const userId = this.resolveId(user);
     const roleId = this.guild.roles.resolveId(role);
 
     await this.client.api.guilds(this.guild.id).members(userId).roles(roleId).delete({ reason });
 
     return this.resolve(user) ?? this.client.users.resolve(user) ?? userId;
+  }
+
+  /**
+   * Experimental method to fetch members from the guild.
+   * <info>Lists up to 10000 members of the guild.</info>
+   * @param {number} [timeout=15_000] Timeout for receipt of members in ms
+   * @returns {Promise<Collection<Snowflake, GuildMember>>}
+   */
+  fetchByMemberSafety(timeout = 15_000) {
+    return new Promise(resolve => {
+      const nonce = SnowflakeUtil.generate();
+      const fetchedMembers = new Collection();
+      let timeout_ = setTimeout(() => {
+        this.client.removeListener(Events.GUILD_MEMBERS_CHUNK, handler);
+        resolve(fetchedMembers);
+      }, timeout).unref();
+      const handler = (members, guild, chunk) => {
+        if (guild.id == this.guild.id && chunk.nonce == nonce) {
+          if (members.size > 0) {
+            for (const member of members.values()) {
+              fetchedMembers.set(member.id, member);
+            }
+            this.client.ws.broadcast({
+              op: Opcodes.SEARCH_RECENT_MEMBERS,
+              d: {
+                guild_id: this.guild.id,
+                query: '',
+                continuation_token: members.first()?.id,
+                nonce,
+              },
+            });
+          } else {
+            clearTimeout(timeout_);
+            this.client.removeListener(Events.GUILD_MEMBERS_CHUNK, handler);
+            resolve(fetchedMembers);
+          }
+        }
+      };
+      this.client.on(Events.GUILD_MEMBERS_CHUNK, handler);
+      this.client.ws.broadcast({
+        op: Opcodes.SEARCH_RECENT_MEMBERS,
+        d: {
+          guild_id: this.guild.id,
+          query: '',
+          continuation_token: null,
+          nonce,
+        },
+      });
+    });
   }
 
   _fetchMany({
@@ -766,6 +591,26 @@ class GuildMemberManager extends CachedManager {
       this.client.incrementMaxListeners();
       this.client.on(Events.GUILD_MEMBERS_CHUNK, handler);
     });
+  }
+
+  /**
+   * Bulk ban users from a guild, and optionally delete previous messages sent by them.
+   * @param {Collection<Snowflake, UserResolvable>|UserResolvable[]} users The users to ban
+   * @param {BulkBanOptions} [options] The options for bulk banning users
+   * @returns {Promise<BulkBanResult>} Returns an object with `bannedUsers` key containing the IDs of the banned users
+   * and the key `failedUsers` with the IDs that could not be banned or were already banned.
+   * Internally calls the GuildBanManager#bulkCreate method.
+   * @example
+   * // Bulk ban users by ids (or with user/guild member objects) and delete all their messages from the past 7 days
+   * guild.members.bulkBan(['84484653687267328'], { deleteMessageSeconds: 7 * 24 * 60 * 60 })
+   *   .then(result => {
+   *     console.log(`Banned ${result.bannedUsers.length} users, failed to ban ${result.failedUsers.length} users.`)
+   *   })
+   *   .catch(console.error);
+   * @deprecated This method will not be usable until an effective MFA implementation is in place.
+   */
+  bulkBan(users, options = {}) {
+    return this.guild.bans.bulkCreate(users, options);
   }
 }
 

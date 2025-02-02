@@ -130,7 +130,7 @@ class GuildBanManager extends CachedManager {
    * @typedef {Object} BanOptions
    * @property {number} [days=0] Number of days of messages to delete, must be between 0 and 7, inclusive
    * <warn>This property is deprecated. Use `deleteMessageSeconds` instead.</warn>
-   * @property {number} [deleteMessageSeconds=0] Number of seconds of messages to delete,
+   * @property {number} [deleteMessageSeconds] Number of seconds of messages to delete,
    * must be between 0 and 604800 (7 days), inclusive
    * @property {string} [reason] The reason for the ban
    */
@@ -175,7 +175,7 @@ class GuildBanManager extends CachedManager {
         reason: options.reason,
       });
     if (user instanceof GuildMember) return user;
-    const _user = this.client.users.resolve(id);
+    const _user = this.client.users.cache.get(id);
     if (_user) {
       return this.guild.members.resolve(_user) ?? _user;
     }
@@ -198,6 +198,52 @@ class GuildBanManager extends CachedManager {
     if (!id) throw new Error('BAN_RESOLVE_ID');
     await this.client.api.guilds(this.guild.id).bans(id).delete({ reason });
     return this.client.users.resolve(user);
+  }
+
+  /**
+   * Options used for bulk banning users from a guild.
+   * @typedef {Object} BulkBanOptions
+   * @property {number} [deleteMessageSeconds] Number of seconds of messages to delete,
+   * must be between 0 and 604800 (7 days), inclusive
+   * @property {string} [reason] The reason for the bans
+   */
+
+  /**
+   * Result of bulk banning users from a guild.
+   * @typedef {Object} BulkBanResult
+   * @property {Snowflake[]} bannedUsers IDs of the banned users
+   * @property {Snowflake[]} failedUsers IDs of the users that could not be banned or were already banned
+   */
+
+  /**
+   * Bulk ban users from a guild, and optionally delete previous messages sent by them.
+   * @param {Collection<Snowflake, UserResolvable>|UserResolvable[]} users The users to ban
+   * @param {BulkBanOptions} [options] The options for bulk banning users
+   * @returns {Promise<BulkBanResult>} Returns an object with `bannedUsers` key containing the IDs of the banned users
+   * and the key `failedUsers` with the IDs that could not be banned or were already banned.
+   * @example
+   * // Bulk ban users by ids (or with user/guild member objects) and delete all their messages from the past 7 days
+   * guild.bans.bulkCreate(['84484653687267328'], { deleteMessageSeconds: 7 * 24 * 60 * 60 })
+   *   .then(result => {
+   *     console.log(`Banned ${result.bannedUsers.length} users, failed to ban ${result.failedUsers.length} users.`)
+   *   })
+   *   .catch(console.error);
+   * @deprecated This method will not be usable until an effective MFA implementation is in place.
+   */
+  async bulkCreate(users, options = {}) {
+    if (!users || !(Array.isArray(users) || users instanceof Collection)) {
+      throw new TypeError('INVALID_TYPE', 'users', 'Array or Collection of UserResolvable', true);
+    }
+    if (typeof options !== 'object') throw new TypeError('INVALID_TYPE', 'options', 'object', true);
+
+    const userIds = users.map(user => this.client.users.resolveId(user));
+    if (userIds.length === 0) throw new Error('BULK_BAN_USERS_OPTION_EMPTY');
+
+    const result = await this.client.api.guilds(this.guild.id)['bulk-ban'].post({
+      data: { delete_message_days: options.deleteMessageSeconds, user_ids: userIds },
+      reason: options.reason,
+    });
+    return { bannedUsers: result.banned_users, failedUsers: result.failed_users };
   }
 }
 

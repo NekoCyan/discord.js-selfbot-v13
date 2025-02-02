@@ -3,7 +3,6 @@
 const process = require('node:process');
 const { Collection } = require('@discordjs/collection');
 const CachedManager = require('./CachedManager');
-const ThreadManager = require('./ThreadManager');
 const { Error, TypeError } = require('../errors');
 const GuildChannel = require('../structures/GuildChannel');
 const PermissionOverwrites = require('../structures/PermissionOverwrites');
@@ -90,7 +89,7 @@ class GuildChannelManager extends CachedManager {
    * @returns {?(GuildChannel|ThreadChannel)}
    */
   resolve(channel) {
-    if (channel instanceof ThreadChannel) return super.resolve(channel.id);
+    if (channel instanceof ThreadChannel) return this.cache.get(channel.id) ?? null;
     return super.resolve(channel);
   }
 
@@ -150,6 +149,7 @@ class GuildChannelManager extends CachedManager {
       defaultReactionEmoji,
       defaultSortOrder,
       defaultForumLayout,
+      defaultThreadRateLimitPerUser,
       reason,
     } = {},
   ) {
@@ -191,6 +191,7 @@ class GuildChannelManager extends CachedManager {
         default_reaction_emoji: defaultReactionEmoji && transformGuildDefaultReaction(defaultReactionEmoji),
         default_sort_order: sortMode,
         default_forum_layout: layoutMode,
+        default_thread_rate_limit_per_user: defaultThreadRateLimitPerUser,
       },
       reason,
     });
@@ -289,15 +290,15 @@ class GuildChannelManager extends CachedManager {
     channel = this.resolve(channel);
     if (!channel) throw new TypeError('INVALID_TYPE', 'channel', 'GuildChannelResolvable');
 
-    const parent = data.parent && this.client.channels.resolveId(data.parent);
+    const parentId = data.parent && this.client.channels.resolveId(data.parent);
 
     if (typeof data.position !== 'undefined') await this.setPosition(channel, data.position, { reason });
 
     let permission_overwrites = data.permissionOverwrites?.map(o => PermissionOverwrites.resolve(o, this.guild));
 
     if (data.lockPermissions) {
-      if (parent) {
-        const newParent = this.guild.channels.resolve(parent);
+      if (parentId) {
+        const newParent = this.cache.get(parentId);
         if (newParent?.type === 'GUILD_CATEGORY') {
           permission_overwrites = newParent.permissionOverwrites.cache.map(o =>
             PermissionOverwrites.resolve(o, this.guild),
@@ -324,7 +325,7 @@ class GuildChannelManager extends CachedManager {
         rtc_region: 'rtcRegion' in data ? data.rtcRegion : channel.rtcRegion,
         video_quality_mode:
           typeof data.videoQualityMode === 'string' ? VideoQualityModes[data.videoQualityMode] : data.videoQualityMode,
-        parent_id: parent,
+        parent_id: parentId,
         lock_permissions: data.lockPermissions,
         rate_limit_per_user: data.rateLimitPerUser,
         default_auto_archive_duration: defaultAutoArchiveDuration,
@@ -464,21 +465,6 @@ class GuildChannelManager extends CachedManager {
       guild_id: this.guild.id,
       channels: channelPositions,
     }).guild;
-  }
-
-  /**
-   * Obtains all active thread channels in the guild from Discord
-   * @param {boolean} [cache=true] Whether to cache the fetched data
-   * @returns {Promise<FetchedThreads>}
-   * @example
-   * // Fetch all threads from the guild
-   * message.guild.channels.fetchActiveThreads()
-   *   .then(fetched => console.log(`There are ${fetched.threads.size} threads.`))
-   *   .catch(console.error);
-   */
-  async fetchActiveThreads(cache = true) {
-    const raw = await this.client.api.guilds(this.guild.id).threads.active.get();
-    return ThreadManager._mapThreads(raw, this.client, { guild: this.guild, cache });
   }
 
   /**

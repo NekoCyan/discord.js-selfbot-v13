@@ -8,67 +8,7 @@ export const enum ActivityTypes {
   WATCHING = 3,
   CUSTOM = 4,
   COMPETING = 5,
-}
-
-export const enum DMScanLevel {
-  NOT_SCAN = 0,
-  NOT_FRIEND = 1,
-  EVERYONE = 2,
-}
-
-export const enum stickerAnimationMode {
-  ALWAYS = 0,
-  INTERACTION = 1,
-  NEVER = 2,
-}
-
-export const enum NitroType {
-  NONE = 0,
-  NITRO_CLASSIC = 1,
-  NITRO_BOOST = 2,
-  NITRO_BASIC = 3,
-}
-
-export const enum RelationshipTypes {
-  NONE = 0,
-  FRIEND = 1,
-  BLOCKED = 2,
-  PENDING_INCOMING = 3,
-  PENDING_OUTGOING = 4,
-  IMPLICIT = 5,
-}
-
-export const enum localeSetting {
-  DANISH = 'da',
-  GERMAN = 'de',
-  ENGLISH_UK = 'en-GB',
-  ENGLISH_US = 'en-US',
-  SPANISH = 'es-ES',
-  FRENCH = 'fr',
-  CROATIAN = 'hr',
-  ITALIAN = 'it',
-  LITHUANIAN = 'lt',
-  HUNGARIAN = 'hu',
-  DUTCH = 'nl',
-  NORWEGIAN = 'no',
-  POLISH = 'pl',
-  BRAZILIAN_PORTUGUESE = 'pt-BR',
-  ROMANIA_ROMANIAN = 'ro',
-  FINNISH = 'fi',
-  SWEDISH = 'sv-SE',
-  VIETNAMESE = 'vi',
-  TURKISH = 'tr',
-  CZECH = 'cs',
-  GREEK = 'el',
-  BULGARIAN = 'bg',
-  RUSSIAN = 'ru',
-  UKRAINIAN = 'uk',
-  HINDI = 'hi',
-  THAI = 'th',
-  CHINA_CHINESE = 'zh-CN',
-  JAPANESE = 'ja',
-  TAIWAN_CHINESE = 'zh-TW',
-  KOREAN = 'ko',
+  HANG = 6,
 }
 
 export const enum ApplicationCommandTypes {
@@ -134,21 +74,27 @@ export const enum ChannelTypes {
   GUILD_STAGE_VOICE = 13,
   GUILD_DIRECTORY = 14,
   GUILD_FORUM = 15,
+  GUILD_MEDIA = 16,
 }
 
-export const enum SortOrderType {
+export const enum SortOrderTypes {
   LATEST_ACTIVITY = 1,
   CREATION_DATE = 2,
 }
 
-export const enum ForumLayoutType {
+export const enum ForumLayoutTypes {
   NOT_SET = 0,
   LIST_VIEW = 1,
   GALLERY_VIEW = 2,
 }
 
+export const enum PollLayoutTypes {
+  DEFAULT = 1,
+  IMAGE_ONLY_ANSWERS,
+}
+
 export const enum MessageTypes {
-  DEFAULT,
+  DEFAULT = 0,
   RECIPIENT_ADD,
   RECIPIENT_REMOVE,
   CALL,
@@ -173,6 +119,30 @@ export const enum MessageTypes {
   CONTEXT_MENU_COMMAND,
   AUTO_MODERATION_ACTION,
   ROLE_SUBSCRIPTION_PURCHASE,
+  INTERACTION_PREMIUM_UPSELL,
+  STAGE_START,
+  STAGE_END,
+  STAGE_SPEAKER,
+  STAGE_RAISE_HAND,
+  STAGE_TOPIC,
+  GUILD_APPLICATION_PREMIUM_SUBSCRIPTION,
+  PREMIUM_REFERRAL = 35,
+  GUILD_INCIDENT_ALERT_MODE_ENABLED,
+  GUILD_INCIDENT_ALERT_MODE_DISABLED,
+  GUILD_INCIDENT_REPORT_RAID,
+  GUILD_INCIDENT_REPORT_FALSE_ALARM,
+  GUILD_DEADCHAT_REVIVE_PROMPT,
+  CUSTOM_GIFT,
+  GUILD_GAMING_STATS_PROMPT,
+  PURCHASE_NOTIFICATION = 44,
+  POLL_RESULT = 46,
+  CHANGELOG,
+  NITRO_NOTIFICATION,
+}
+
+export const enum MessageReferenceTypes {
+  DEFAULT = 0,
+  FORWARD,
 }
 
 export const enum DefaultMessageNotificationLevels {
@@ -203,13 +173,6 @@ export const enum GuildScheduledEventStatuses {
   CANCELED = 4,
 }
 
-export const enum HypeSquadType {
-  LEAVE = 0,
-  HOUSE_BRAVERY = 1,
-  HOUSE_BRILLIANCE = 2,
-  HOUSE_BALANCE = 3,
-}
-
 export const enum InteractionResponseTypes {
   PONG = 1,
   CHANNEL_MESSAGE_WITH_SOURCE = 4,
@@ -228,9 +191,17 @@ export const enum InteractionTypes {
   MODAL_SUBMIT = 5,
 }
 
-export const enum InviteTargetType {
+export const enum InviteTargetTypes {
   STREAM = 1,
-  EMBEDDED_APPLICATION = 2,
+  EMBEDDED_APPLICATION,
+  ROLE_SUBSCRIPTIONS,
+  CREATOR_PAGE,
+}
+
+export const enum InviteTypes {
+  GUILD,
+  GROUP_DM,
+  FRIEND,
 }
 
 export const enum MembershipStates {
@@ -249,8 +220,6 @@ export const enum MessageButtonStyles {
 export const enum MessageComponentTypes {
   ACTION_ROW = 1,
   BUTTON = 2,
-  /** @deprecated Use `STRING_SELECT` instead */
-  SELECT_MENU = 3,
   STRING_SELECT = 3,
   TEXT_INPUT = 4,
   USER_SELECT = 5,
@@ -260,8 +229,6 @@ export const enum MessageComponentTypes {
 }
 
 export const enum SelectMenuComponentTypes {
-  /** @deprecated Use `STRING_SELECT` instead */
-  SELECT_MENU = 3,
   STRING_SELECT = 3,
   USER_SELECT = 5,
   ROLE_SELECT = 6,
@@ -328,6 +295,11 @@ export const enum VideoQualityModes {
   FULL = 2,
 }
 
+export const enum ReactionTypes {
+  NORMAL = 0,
+  BURST = 1,
+}
+
 export const enum WebhookTypes {
   Incoming = 1,
   'Channel Follower' = 2,
@@ -343,4 +315,13 @@ export enum ApplicationRoleConnectionMetadataTypes {
   DATATIME_GREATER_THAN_OR_EQUAL,
   BOOLEAN_EQUAL,
   BOOLEAN_NOT_EQUAL,
+}
+
+export const enum RelationshipTypes {
+  NONE = 0,
+  FRIEND = 1,
+  BLOCKED = 2,
+  PENDING_INCOMING = 3,
+  PENDING_OUTGOING = 4,
+  IMPLICIT = 5,
 }

@@ -3,9 +3,9 @@
 const { Buffer } = require('node:buffer');
 const BaseMessageComponent = require('./BaseMessageComponent');
 const MessageEmbed = require('./MessageEmbed');
-const WebEmbed = require('./WebEmbed');
 const { RangeError } = require('../errors');
 const ActivityFlags = require('../util/ActivityFlags');
+const { PollLayoutTypes, MessageReferenceTypes } = require('../util/Constants');
 const DataResolver = require('../util/DataResolver');
 const MessageFlags = require('../util/MessageFlags');
 const Util = require('../util/Util');
@@ -42,7 +42,6 @@ class MessagePayload {
      * @property {Buffer|string|Stream} attachment The original attachment that generated this file
      * @property {string} name The name of this file
      * @property {Buffer|Stream} file The file to be sent to the API
-     * @extends {APIAttachment}
      */
 
     /**
@@ -50,15 +49,6 @@ class MessagePayload {
      * @type {?MessageFile[]}
      */
     this.files = null;
-  }
-
-  /**
-   * Whether or not using new API to upload files
-   * @type {boolean}
-   * @readonly
-   */
-  get usingNewAttachmentAPI() {
-    return Boolean(this.options?.usingNewAttachmentAPI);
   }
 
   /**
@@ -133,12 +123,12 @@ class MessagePayload {
    * Resolves data.
    * @returns {MessagePayload}
    */
-  async resolveData() {
+  resolveData() {
     if (this.data) return this;
     const isInteraction = this.isInteraction;
     const isWebhook = this.isWebhook;
 
-    let content = this.makeContent();
+    const content = this.makeContent();
     const tts = Boolean(this.options.tts);
 
     let nonce;
@@ -155,20 +145,22 @@ class MessagePayload {
     let username;
     let avatarURL;
     let threadName;
+    let appliedTags;
     if (isWebhook) {
       username = this.options.username ?? this.target.name;
       if (this.options.avatarURL) avatarURL = this.options.avatarURL;
       if (this.options.threadName) threadName = this.options.threadName;
+      if (this.options.appliedTags) appliedTags = this.options.appliedTags;
     }
 
     let flags;
     if (
-      typeof this.options.flags !== 'undefined' ||
+      // eslint-disable-next-line eqeqeq
+      this.options.flags != null ||
       (this.isMessage && typeof this.options.reply === 'undefined') ||
       this.isMessageManager
     ) {
-      // eslint-disable-next-line eqeqeq
-      flags = this.options.flags != null ? new MessageFlags(this.options.flags).bitfield : this.target.flags?.bitfield;
+      flags = new MessageFlags(this.options.flags).bitfield;
     }
 
     if (isInteraction && this.options.ephemeral) {
@@ -193,9 +185,14 @@ class MessagePayload {
       if (message_id) {
         message_reference = {
           message_id,
+          type: MessageReferenceTypes.DEFAULT,
           fail_if_not_exists: this.options.reply.failIfNotExists ?? this.target.client.options.failIfNotExists,
         };
       }
+    }
+    if (typeof this.options.forward === 'object') {
+      message_reference = this.options.forward;
+      message_reference.type = MessageReferenceTypes.FORWARD;
     }
 
     const attachments = this.options.files?.map((file, index) => ({
@@ -206,37 +203,6 @@ class MessagePayload {
       this.options.attachments.push(...(attachments ?? []));
     } else {
       this.options.attachments = attachments;
-    }
-
-    if (this.options.embeds) {
-      if (!Array.isArray(this.options.embeds)) {
-        this.options.embeds = [this.options.embeds];
-      }
-
-      const webembeds = this.options.embeds.filter(e => e instanceof WebEmbed);
-      this.options.embeds = this.options.embeds.filter(e => !(e instanceof WebEmbed));
-
-      if (webembeds.length > 0) {
-        if (!content) content = '';
-        // Add hidden embed link
-        content += `\n${WebEmbed.hiddenEmbed} \n`;
-        if (webembeds.length > 1) {
-          console.warn('[WARN] Multiple webembeds are not supported, this will be ignored.');
-        }
-        // Const embed = webembeds[0];
-        for (const webE of webembeds) {
-          const data = await webE.toMessage();
-          content += `\n${data}`;
-        }
-      }
-      // Check content
-      if (typeof content == 'string' && content.length > 2000) {
-        console.warn('[WARN] Content is longer than 2000 characters.');
-      }
-      if (typeof content == 'string' && content.length > 4000) {
-        // Max length if user has nitro boost
-        throw new RangeError('MESSAGE_EMBED_LINK_LENGTH');
-      }
     }
 
     // Activity
@@ -256,6 +222,24 @@ class MessagePayload {
       };
     }
 
+    let poll;
+    if (this.options.poll) {
+      poll = {
+        question: {
+          text: this.options.poll.question.text,
+        },
+        answers: this.options.poll.answers.map(answer => ({
+          poll_media: { text: answer.text, emoji: Util.resolvePartialEmoji(answer.emoji) },
+        })),
+        duration: this.options.poll.duration,
+        allow_multiselect: this.options.poll.allowMultiselect,
+        layout_type:
+          typeof this.options.poll.layoutType == 'number'
+            ? this.options.poll.layoutType
+            : PollLayoutTypes[this.options.poll.layoutType],
+      };
+    }
+
     this.data = {
       activity,
       content,
@@ -272,6 +256,8 @@ class MessagePayload {
       attachments: this.options.attachments,
       sticker_ids: this.options.stickers?.map(sticker => sticker.id ?? sticker),
       thread_name: threadName,
+      applied_tags: appliedTags,
+      poll,
     };
     return this;
   }
@@ -348,7 +334,7 @@ module.exports = MessagePayload;
 
 /**
  * A target for a message.
- * @typedef {TextBasedChannels|DMChannel|User|GuildMember|Webhook|WebhookClient|Interaction|InteractionWebhook|
+ * @typedef {TextBasedChannels|User|GuildMember|Webhook|WebhookClient|Interaction|InteractionWebhook|
  * Message|MessageManager} MessageTarget
  */
 

@@ -1,23 +1,20 @@
 'use strict';
 
-const tls = require('tls');
-// Cipher
-tls.DEFAULT_CIPHERS = tls.DEFAULT_CIPHERS.split(':')
-  .sort(() => Math.random() - 0.5)
-  .join(':');
-
 // "Root" classes (starting points)
 exports.BaseClient = require('./client/BaseClient');
 exports.Client = require('./client/Client');
+/** @deprecated This will be removed in the next major version */
 exports.Shard = require('./sharding/Shard');
+/** @deprecated This will be removed in the next major version */
 exports.ShardClientUtil = require('./sharding/ShardClientUtil');
+/** @deprecated This will be removed in the next major version */
 exports.ShardingManager = require('./sharding/ShardingManager');
 exports.WebhookClient = require('./client/WebhookClient');
 
 // Utilities
-exports.DiscordRPCServer = require('./util/arRPC/index');
 exports.ActivityFlags = require('./util/ActivityFlags');
 exports.ApplicationFlags = require('./util/ApplicationFlags');
+exports.AttachmentFlags = require('./util/AttachmentFlags');
 exports.BaseManager = require('./managers/BaseManager');
 exports.BitField = require('./util/BitField');
 exports.Collection = require('@discordjs/collection').Collection;
@@ -33,6 +30,7 @@ exports.MessageFlags = require('./util/MessageFlags');
 exports.Options = require('./util/Options');
 exports.Permissions = require('./util/Permissions');
 exports.RateLimitError = require('./rest/RateLimitError');
+exports.RoleFlags = require('./util/RoleFlags');
 exports.SnowflakeUtil = require('./util/SnowflakeUtil');
 exports.Sweepers = require('./util/Sweepers');
 exports.SystemChannelFlags = require('./util/SystemChannelFlags');
@@ -40,8 +38,6 @@ exports.ThreadMemberFlags = require('./util/ThreadMemberFlags');
 exports.UserFlags = require('./util/UserFlags');
 exports.Util = require('./util/Util');
 exports.version = require('../package.json').version;
-exports.DiscordAuthWebsocket = require('./util/RemoteAuth');
-exports.PurchasedFlags = require('./util/PurchasedFlags');
 
 // Managers
 exports.ApplicationCommandManager = require('./managers/ApplicationCommandManager');
@@ -52,7 +48,6 @@ exports.CachedManager = require('./managers/CachedManager');
 exports.ChannelManager = require('./managers/ChannelManager');
 exports.ClientVoiceManager = require('./client/voice/ClientVoiceManager');
 exports.DataManager = require('./managers/DataManager');
-exports.GuildApplicationCommandManager = require('./managers/GuildApplicationCommandManager');
 exports.GuildBanManager = require('./managers/GuildBanManager');
 exports.GuildChannelManager = require('./managers/GuildChannelManager');
 exports.GuildEmojiManager = require('./managers/GuildEmojiManager');
@@ -69,7 +64,6 @@ exports.PresenceManager = require('./managers/PresenceManager');
 exports.ReactionManager = require('./managers/ReactionManager');
 exports.ReactionUserManager = require('./managers/ReactionUserManager');
 exports.RoleManager = require('./managers/RoleManager');
-exports.SessionManager = require('./managers/SessionManager');
 exports.StageInstanceManager = require('./managers/StageInstanceManager');
 exports.ThreadManager = require('./managers/ThreadManager');
 exports.ThreadMemberManager = require('./managers/ThreadMemberManager');
@@ -78,6 +72,7 @@ exports.VoiceStateManager = require('./managers/VoiceStateManager');
 exports.WebSocketManager = require('./client/websocket/WebSocketManager');
 exports.WebSocketShard = require('./client/websocket/WebSocketShard');
 exports.RelationshipManager = require('./managers/RelationshipManager');
+exports.UserNoteManager = require('./managers/UserNoteManager');
 
 // Structures
 exports.Activity = require('./structures/Presence').Activity;
@@ -86,28 +81,21 @@ exports.Application = require('./structures/interfaces/Application');
 exports.ApplicationCommand = require('./structures/ApplicationCommand');
 exports.ApplicationRoleConnectionMetadata =
   require('./structures/ApplicationRoleConnectionMetadata').ApplicationRoleConnectionMetadata;
-exports.AutocompleteInteraction = require('./structures/AutocompleteInteraction');
 exports.AutoModerationActionExecution = require('./structures/AutoModerationActionExecution');
 exports.AutoModerationRule = require('./structures/AutoModerationRule');
 exports.Base = require('./structures/Base');
-exports.BaseCommandInteraction = require('./structures/BaseCommandInteraction');
 exports.BaseGuild = require('./structures/BaseGuild');
 exports.BaseGuildEmoji = require('./structures/BaseGuildEmoji');
 exports.BaseGuildTextChannel = require('./structures/BaseGuildTextChannel');
 exports.BaseGuildVoiceChannel = require('./structures/BaseGuildVoiceChannel');
-exports.BaseMessageComponent = require('./structures/BaseMessageComponent');
-exports.ButtonInteraction = require('./structures/ButtonInteraction');
 exports.CategoryChannel = require('./structures/CategoryChannel');
 exports.Channel = require('./structures/Channel').Channel;
-exports.ClientApplication = require('./structures/ClientApplication');
 exports.ClientPresence = require('./structures/ClientPresence');
 exports.ClientUser = require('./structures/ClientUser');
 exports.Collector = require('./structures/interfaces/Collector');
-exports.CommandInteraction = require('./structures/CommandInteraction');
-exports.CommandInteractionOptionResolver = require('./structures/CommandInteractionOptionResolver');
-exports.ContextMenuInteraction = require('./structures/ContextMenuInteraction');
 exports.DMChannel = require('./structures/DMChannel');
 exports.Emoji = require('./structures/Emoji').Emoji;
+exports.ForumChannel = require('./structures/ForumChannel');
 exports.Guild = require('./structures/Guild').Guild;
 exports.GuildAuditLogs = require('./structures/GuildAuditLogs');
 exports.GuildAuditLogsEntry = require('./structures/GuildAuditLogs').Entry;
@@ -121,49 +109,29 @@ exports.GuildScheduledEvent = require('./structures/GuildScheduledEvent').GuildS
 exports.GuildTemplate = require('./structures/GuildTemplate');
 exports.Integration = require('./structures/Integration');
 exports.IntegrationApplication = require('./structures/IntegrationApplication');
-exports.Interaction = require('./structures/Interaction');
-exports.InteractionCollector = require('./structures/InteractionCollector');
-exports.InteractionWebhook = require('./structures/InteractionWebhook');
 exports.Invite = require('./structures/Invite');
 exports.InviteStageInstance = require('./structures/InviteStageInstance');
 exports.InviteGuild = require('./structures/InviteGuild');
+exports.MediaChannel = require('./structures/MediaChannel');
 exports.Message = require('./structures/Message').Message;
 exports.MessageActionRow = require('./structures/MessageActionRow');
 exports.MessageAttachment = require('./structures/MessageAttachment');
 exports.MessageButton = require('./structures/MessageButton');
 exports.MessageCollector = require('./structures/MessageCollector');
-exports.MessageComponentInteraction = require('./structures/MessageComponentInteraction');
-exports.MessageContextMenuInteraction = require('./structures/MessageContextMenuInteraction');
 exports.MessageEmbed = require('./structures/MessageEmbed');
-exports.WebEmbed = require('./structures/WebEmbed');
 exports.MessageMentions = require('./structures/MessageMentions');
 exports.MessagePayload = require('./structures/MessagePayload');
 exports.MessageReaction = require('./structures/MessageReaction');
-exports.MessageSelectMenu = require('./structures/MessageSelectMenu');
 exports.Modal = require('./structures/Modal');
-exports.ModalSubmitInteraction = require('./structures/ModalSubmitInteraction');
 exports.NewsChannel = require('./structures/NewsChannel');
 exports.OAuth2Guild = require('./structures/OAuth2Guild');
-exports.PartialGroupDMChannel = require('./structures/PartialGroupDMChannel');
+exports.GroupDMChannel = require('./structures/GroupDMChannel');
 exports.PermissionOverwrites = require('./structures/PermissionOverwrites');
 exports.Presence = require('./structures/Presence').Presence;
 exports.ReactionCollector = require('./structures/ReactionCollector');
 exports.ReactionEmoji = require('./structures/ReactionEmoji');
 exports.RichPresenceAssets = require('./structures/Presence').RichPresenceAssets;
 exports.Role = require('./structures/Role').Role;
-exports.Session = require('./structures/Session');
-// RPC
-exports.getUUID = require('./structures/RichPresence').getUUID;
-exports.CustomStatus = require('./structures/RichPresence').CustomStatus;
-exports.RichPresence = require('./structures/RichPresence').RichPresence;
-exports.SpotifyRPC = require('./structures/RichPresence').SpotifyRPC;
-// SelectMenu
-exports.ChannelSelectInteraction = require('./structures/SelectMenuInteraction').ChannelSelectInteraction;
-exports.MentionableSelectInteraction = require('./structures/SelectMenuInteraction').MentionableSelectInteraction;
-exports.RoleSelectInteraction = require('./structures/SelectMenuInteraction').RoleSelectInteraction;
-exports.SelectMenuInteraction = require('./structures/SelectMenuInteraction').SelectMenuInteraction;
-exports.UserSelectInteraction = require('./structures/SelectMenuInteraction').UserSelectInteraction;
-//
 exports.StageChannel = require('./structures/StageChannel');
 exports.StageInstance = require('./structures/StageInstance').StageInstance;
 exports.Sticker = require('./structures/Sticker').Sticker;
@@ -174,11 +142,12 @@ exports.TeamMember = require('./structures/TeamMember');
 exports.TextChannel = require('./structures/TextChannel');
 exports.TextInputComponent = require('./structures/TextInputComponent');
 exports.ThreadChannel = require('./structures/ThreadChannel');
+exports.ThreadOnlyChannel = require('./structures/ThreadOnlyChannel');
 exports.ThreadMember = require('./structures/ThreadMember');
 exports.Typing = require('./structures/Typing');
 exports.User = require('./structures/User');
-exports.UserContextMenuInteraction = require('./structures/UserContextMenuInteraction');
 exports.VoiceChannel = require('./structures/VoiceChannel');
+exports.VoiceChannelEffect = require('./structures/VoiceChannelEffect');
 exports.VoiceRegion = require('./structures/VoiceRegion');
 exports.VoiceState = require('./structures/VoiceState');
 exports.Webhook = require('./structures/Webhook');
@@ -186,4 +155,14 @@ exports.Widget = require('./structures/Widget');
 exports.WidgetMember = require('./structures/WidgetMember');
 exports.WelcomeChannel = require('./structures/WelcomeChannel');
 exports.WelcomeScreen = require('./structures/WelcomeScreen');
+
 exports.WebSocket = require('./WebSocket');
+
+exports.CustomStatus = require('./structures/Presence').CustomStatus;
+exports.RichPresence = require('./structures/Presence').RichPresence;
+exports.SpotifyRPC = require('./structures/Presence').SpotifyRPC;
+exports.WebEmbed = require('./structures/WebEmbed');
+exports.DiscordAuthWebsocket = require('./util/RemoteAuth');
+exports.PurchasedFlags = require('./util/PurchasedFlags');
+exports.Poll = require('./structures/Poll').Poll;
+exports.PollAnswer = require('./structures/PollAnswer').PollAnswer;

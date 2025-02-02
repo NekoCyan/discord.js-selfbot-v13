@@ -1,16 +1,77 @@
 'use strict';
 
+const { Agent } = require('node:http');
 const { parse } = require('node:path');
 const process = require('node:process');
+const { setTimeout } = require('node:timers');
 const { Collection } = require('@discordjs/collection');
-const fetch = require('node-fetch');
-const { Colors } = require('./Constants');
-const { RangeError, TypeError } = require('../errors');
+const { fetch } = require('undici');
+const { Colors, Events } = require('./Constants');
+const { Error: DiscordError, RangeError, TypeError } = require('../errors');
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const isObject = d => typeof d === 'object' && d !== null;
 
 let deprecationEmittedForSplitMessage = false;
 let deprecationEmittedForRemoveMentions = false;
+let deprecationEmittedForResolveAutoArchiveMaxLimit = false;
+
+const TextSortableGroupTypes = ['GUILD_TEXT', 'GUILD_ANNOUCMENT', 'GUILD_FORUM'];
+const VoiceSortableGroupTypes = ['GUILD_VOICE', 'GUILD_STAGE_VOICE'];
+const CategorySortableGroupTypes = ['GUILD_CATEGORY'];
+
+const payloadTypes = [
+  {
+    name: 'opus',
+    type: 'audio',
+    priority: 1000,
+    payload_type: 120,
+  },
+  {
+    name: 'AV1',
+    type: 'video',
+    priority: 1000,
+    payload_type: 101,
+    rtx_payload_type: 102,
+    encode: false,
+    decode: false,
+  },
+  {
+    name: 'H265',
+    type: 'video',
+    priority: 2000,
+    payload_type: 103,
+    rtx_payload_type: 104,
+    encode: false,
+    decode: false, // Working but very glitchy
+  },
+  {
+    name: 'H264',
+    type: 'video',
+    priority: 3000,
+    payload_type: 105,
+    rtx_payload_type: 106,
+    encode: true,
+    decode: true,
+  },
+  {
+    name: 'VP8',
+    type: 'video',
+    priority: 4000,
+    payload_type: 107,
+    rtx_payload_type: 108,
+    encode: true,
+    decode: false,
+  },
+  {
+    name: 'VP9',
+    type: 'video',
+    priority: 5000,
+    payload_type: 109,
+    rtx_payload_type: 110,
+    encode: false,
+    decode: false,
+  },
+];
 
 /**
  * Contains various general-purpose utility methods.
@@ -134,6 +195,7 @@ class Util extends null {
    * @property {boolean} [numberedList=false] Whether to escape numbered lists
    * @property {boolean} [maskedLink=false] Whether to escape masked links
    */
+
   /**
    * Escapes any Discord-flavour markdown in a string.
    * @param {string} text Content to escape
@@ -216,6 +278,7 @@ class Util extends null {
     if (maskedLink) text = Util.escapeMaskedLink(text);
     return text;
   }
+
   /**
    * Escapes code block markdown in a string.
    * @param {string} text Content to escape
@@ -224,6 +287,7 @@ class Util extends null {
   static escapeCodeBlock(text) {
     return text.replaceAll('```', '\\`\\`\\`');
   }
+
   /**
    * Escapes inline code markdown in a string.
    * @param {string} text Content to escape
@@ -232,6 +296,7 @@ class Util extends null {
   static escapeInlineCode(text) {
     return text.replace(/(?<=^|[^`])``?(?=[^`]|$)/g, match => (match.length === 2 ? '\\`\\`' : '\\`'));
   }
+
   /**
    * Escapes italic markdown in a string.
    * @param {string} text Content to escape
@@ -249,6 +314,7 @@ class Util extends null {
       return `\\_${match}`;
     });
   }
+
   /**
    * Escapes bold markdown in a string.
    * @param {string} text Content to escape
@@ -261,6 +327,7 @@ class Util extends null {
       return '\\*\\*';
     });
   }
+
   /**
    * Escapes underline markdown in a string.
    * @param {string} text Content to escape
@@ -273,6 +340,7 @@ class Util extends null {
       return '\\_\\_';
     });
   }
+
   /**
    * Escapes strikethrough markdown in a string.
    * @param {string} text Content to escape
@@ -281,6 +349,7 @@ class Util extends null {
   static escapeStrikethrough(text) {
     return text.replaceAll('~~', '\\~\\~');
   }
+
   /**
    * Escapes spoiler markdown in a string.
    * @param {string} text Content to escape
@@ -289,6 +358,7 @@ class Util extends null {
   static escapeSpoiler(text) {
     return text.replaceAll('||', '\\|\\|');
   }
+
   /**
    * Escapes escape characters in a string.
    * @param {string} text Content to escape
@@ -297,6 +367,7 @@ class Util extends null {
   static escapeEscape(text) {
     return text.replaceAll('\\', '\\\\');
   }
+
   /**
    * Escapes heading characters in a string.
    * @param {string} text Content to escape
@@ -305,6 +376,7 @@ class Util extends null {
   static escapeHeading(text) {
     return text.replaceAll(/^( {0,2}[*-] +)?(#{1,3} )/gm, '$1\\$2');
   }
+
   /**
    * Escapes bulleted list characters in a string.
    * @param {string} text Content to escape
@@ -313,6 +385,7 @@ class Util extends null {
   static escapeBulletedList(text) {
     return text.replaceAll(/^( *)[*-]( +)/gm, '$1\\-$2');
   }
+
   /**
    * Escapes numbered list characters in a string.
    * @param {string} text Content to escape
@@ -321,6 +394,7 @@ class Util extends null {
   static escapeNumberedList(text) {
     return text.replaceAll(/^( *\d+)\./gm, '$1\\.');
   }
+
   /**
    * Escapes masked link characters in a string.
    * @param {string} text Content to escape
@@ -328,6 +402,16 @@ class Util extends null {
    */
   static escapeMaskedLink(text) {
     return text.replaceAll(/\[.+\]\(.+\)/gm, '\\$&');
+  }
+
+  /**
+   * @typedef {Object} FetchRecommendedShardsOptions
+   * @property {number} [guildsPerShard=1000] Number of guilds assigned per shard
+   * @property {number} [multipleOf=1] The multiple the shard count should round up to. (16 for large bot sharding)
+   */
+
+  static fetchRecommendedShards() {
+    throw new DiscordError('INVALID_USER_API');
   }
 
   /**
@@ -576,7 +660,7 @@ class Util extends null {
           return user ? Util._removeMentions(`@${user.username}`) : input;
         }
 
-        const member = channel.guild.members.cache.get(id);
+        const member = channel.guild?.members.cache.get(id);
         if (member) {
           return Util._removeMentions(`@${member.displayName}`);
         } else {
@@ -619,24 +703,20 @@ class Util extends null {
 
   /**
    * Resolves the maximum time a guild's thread channels should automatically archive in case of no recent activity.
-   * @deprecated
+   * @param {Guild} guild The guild to resolve this limit from.
+   * @deprecated This will be removed in the next major version.
    * @returns {number}
    */
   static resolveAutoArchiveMaxLimit() {
+    if (!deprecationEmittedForResolveAutoArchiveMaxLimit) {
+      process.emitWarning(
+        // eslint-disable-next-line max-len
+        "The Util.resolveAutoArchiveMaxLimit method and the 'MAX' option are deprecated and will be removed in the next major version.",
+        'DeprecationWarning',
+      );
+      deprecationEmittedForResolveAutoArchiveMaxLimit = true;
+    }
     return 10080;
-  }
-
-  /**
-   * Lazily evaluates a callback function (yea it's v14 :yay:)
-   * @param {Function} cb The callback to lazily evaluate
-   * @returns {Function}
-   * @example
-   * const User = lazy(() => require('./User'));
-   * const user = new (User())(client, data);
-   */
-  static lazy(cb) {
-    let defaultValue;
-    return () => (defaultValue ??= cb());
   }
 
   /**
@@ -704,11 +784,66 @@ class Util extends null {
     };
   }
 
-  static async getAttachments(client, channelId, ...files) {
-    files = files.flat(2);
+  /**
+   * Transforms a guild scheduled event recurrence rule object to a snake-cased variant.
+   * @param {GuildScheduledEventRecurrenceRuleOptions} recurrenceRule The recurrence rule to transform
+   * @returns {APIGuildScheduledEventRecurrenceRule}
+   * @ignore
+   */
+  static transformGuildScheduledEventRecurrenceRule(recurrenceRule) {
+    return {
+      start: new Date(recurrenceRule.startAt).toISOString(),
+      // eslint-disable-next-line eqeqeq
+      end: recurrenceRule.endAt != null ? new Date(recurrenceRule.endAt).toISOString() : recurrenceRule.endAt,
+      frequency: recurrenceRule.frequency,
+      interval: recurrenceRule.interval,
+      by_weekday: recurrenceRule.byWeekday,
+      by_n_weekday: recurrenceRule.byNWeekday,
+      by_month: recurrenceRule.byMonth,
+      by_month_day: recurrenceRule.byMonthDay,
+      by_year_day: recurrenceRule.byYearDay,
+      count: recurrenceRule.count,
+    };
+  }
+
+  /**
+   * Gets an array of the channel types that can be moved in the channel group. For example, a GuildText channel would
+   * return an array containing the types that can be ordered within the text channels (always at the top), and a voice
+   * channel would return an array containing the types that can be ordered within the voice channels (always at the
+   * bottom).
+   * @param {ChannelType} type The type of the channel
+   * @returns {ChannelType[]}
+   * @ignore
+   */
+  static getSortableGroupTypes(type) {
+    switch (type) {
+      case 'GUILD_TEXT':
+      case 'GUILD_ANNOUNCEMENT':
+      case 'GUILD_FORUM':
+        return TextSortableGroupTypes;
+      case 'GUILD_VOICE':
+      case 'GUILD_STAGE_VOICE':
+        return VoiceSortableGroupTypes;
+      case 'GUILD_CATEGORY':
+        return CategorySortableGroupTypes;
+      default:
+        return [type];
+    }
+  }
+
+  /**
+   * Calculates the default avatar index for a given user id.
+   * @param {Snowflake} userId - The user id to calculate the default avatar index for
+   * @returns {number}
+   */
+  static calculateUserDefaultAvatarIndex(userId) {
+    return Number(BigInt(userId) >> 22n) % 6;
+  }
+
+  static async getUploadURL(client, channelId, files) {
     if (!files.length) return [];
     files = files.map((file, i) => ({
-      filename: file.name ?? file.attachment?.name ?? file.attachment?.filename ?? 'file.jpg',
+      filename: file.name,
       // 25MB = 26_214_400bytes
       file_size: Math.floor((26_214_400 / 10) * Math.random()),
       id: `${i}`,
@@ -726,6 +861,7 @@ class Util extends null {
       fetch(url, {
         method: 'PUT',
         body: data,
+        duplex: 'half', // Node.js v20
       })
         .then(res => {
           if (res.ok) {
@@ -738,112 +874,144 @@ class Util extends null {
     });
   }
 
-  static testImportModule(name) {
-    try {
-      require.resolve(name);
-      return true;
-    } catch {
-      return false;
-    }
+  /**
+   * Lazily evaluates a callback function (yea it's v14 :yay:)
+   * @param {Function} cb The callback to lazily evaluate
+   * @returns {Function}
+   * @example
+   * const User = lazy(() => require('./User'));
+   * const user = new (User())(client, data);
+   */
+  static lazy(cb) {
+    let defaultValue;
+    return () => (defaultValue ??= cb());
   }
 
   /**
-   * Calculates the default avatar index for a given user id.
-   * @param {Snowflake} userId - The user id to calculate the default avatar index for
-   * @returns {number}
+   * Hacking check object instanceof Proxy-agent
+   * @param {Object} object any
+   * @returns {boolean}
    */
-  static calculateUserDefaultAvatarIndex(userId) {
-    return Number(BigInt(userId) >> 22n) % 6;
+  static verifyProxyAgent(object) {
+    return typeof object == 'object' && object.httpAgent instanceof Agent && object.httpsAgent instanceof Agent;
   }
 
-  static clientRequiredAction(client, code) {
-    let msg = '';
-    let stopClient = false;
-    switch (code) {
-      case null: {
-        msg = 'All required actions have been completed.';
-        break;
-      }
-      case 'AGREEMENTS': {
-        msg = 'You need to accept the new Terms of Service and Privacy Policy.';
-        // https://discord.com/api/v9/users/@me/agreements
-        client.api
-          .users('@me')
-          .agreements.patch({
-            data: {
-              terms: true,
-              privacy: true,
-            },
-          })
-          .then(() => {
-            client.emit(
-              'debug',
-              '[USER_REQUIRED_ACTION] Successfully accepted the new Terms of Service and Privacy Policy.',
-            );
-          })
-          .catch(e => {
-            client.emit(
-              'debug',
-              `[USER_REQUIRED_ACTION] Failed to accept the new Terms of Service and Privacy Policy: ${e}`,
-            );
-          });
-        break;
-      }
-      case 'REQUIRE_CAPTCHA': {
-        msg = 'You need to complete a captcha.';
-        stopClient = true;
-        break;
-      }
-      case 'REQUIRE_VERIFIED_EMAIL': {
-        msg = 'You need to verify your email.';
-        stopClient = true;
-        break;
-      }
-      case 'REQUIRE_REVERIFIED_EMAIL': {
-        msg = 'You need to reverify your email.';
-        stopClient = true;
-        break;
-      }
-      case 'REQUIRE_VERIFIED_PHONE': {
-        msg = 'You need to verify your phone number.';
-        stopClient = true;
-        break;
-      }
-      case 'REQUIRE_REVERIFIED_PHONE': {
-        msg = 'You need to reverify your phone number.';
-        stopClient = true;
-        break;
-      }
-      case 'REQUIRE_VERIFIED_EMAIL_OR_VERIFIED_PHONE': {
-        msg = 'You need to verify your email or verify your phone number.';
-        stopClient = true; // Maybe not
-        break;
-      }
-      case 'REQUIRE_REVERIFIED_EMAIL_OR_VERIFIED_PHONE': {
-        msg = 'You need to reverify your email or verify your phone number.';
-        stopClient = true;
-        break;
-      }
-      case 'REQUIRE_VERIFIED_EMAIL_OR_REVERIFIED_PHONE': {
-        msg = 'You need to verify your email or reverify your phone number.';
-        stopClient = true;
-        break;
-      }
-      case 'REQUIRE_REVERIFIED_EMAIL_OR_REVERIFIED_PHONE': {
-        msg = 'You need to reverify your email or reverify your phone number.';
-        stopClient = true;
-        break;
-      }
-      default: {
-        msg = `Unknown required action: ${code}`;
-        break;
+  static checkUndiciProxyAgent(data) {
+    if (typeof data === 'string') {
+      return {
+        uri: data,
+      };
+    }
+    if (data instanceof URL) {
+      return {
+        uri: data.toString(),
+      };
+    }
+    if (typeof data === 'object' && typeof data.uri === 'string') return data;
+    return false;
+  }
+
+  static createPromiseInteraction(client, nonce, timeoutMs = 5_000, isHandlerDeferUpdate = false, parent) {
+    return new Promise((resolve, reject) => {
+      // Waiting for MsgCreate / ModalCreate
+      let dataFromInteractionSuccess;
+      let dataFromNormal;
+      const handler = data => {
+        // UnhandledPacket
+        if (isHandlerDeferUpdate && data.d?.nonce == nonce && data.t == 'INTERACTION_SUCCESS') {
+          // Interaction#deferUpdate
+          client.removeListener(Events.MESSAGE_CREATE, handler);
+          client.removeListener(Events.UNHANDLED_PACKET, handler);
+          client.removeListener(Events.INTERACTION_MODAL_CREATE, handler);
+          dataFromInteractionSuccess = parent;
+        }
+        if (data.nonce !== nonce) return;
+        clearTimeout(timeout);
+        client.removeListener(Events.MESSAGE_CREATE, handler);
+        client.removeListener(Events.INTERACTION_MODAL_CREATE, handler);
+        if (isHandlerDeferUpdate) client.removeListener(Events.UNHANDLED_PACKET, handler);
+        client.decrementMaxListeners();
+        dataFromNormal = data;
+        resolve(data);
+      };
+      const timeout = setTimeout(() => {
+        if (dataFromInteractionSuccess || dataFromNormal) {
+          resolve(dataFromNormal || dataFromInteractionSuccess);
+          return;
+        }
+        client.removeListener(Events.MESSAGE_CREATE, handler);
+        client.removeListener(Events.INTERACTION_MODAL_CREATE, handler);
+        if (isHandlerDeferUpdate) client.removeListener(Events.UNHANDLED_PACKET, handler);
+        client.decrementMaxListeners();
+        reject(new Error('INTERACTION_FAILED'));
+      }, timeoutMs).unref();
+      client.incrementMaxListeners();
+      client.on(Events.MESSAGE_CREATE, handler);
+      client.on(Events.INTERACTION_MODAL_CREATE, handler);
+      if (isHandlerDeferUpdate) client.on(Events.UNHANDLED_PACKET, handler);
+    });
+  }
+
+  static clearNullOrUndefinedObject(object) {
+    const data = {};
+    const keys = Object.keys(object);
+
+    for (const key of keys) {
+      const value = object[key];
+      if (value === undefined || value === null || (Array.isArray(value) && value.length === 0)) {
+        continue;
+      } else if (!Array.isArray(value) && typeof value === 'object') {
+        const cleanedValue = Util.clearNullOrUndefinedObject(value);
+        if (cleanedValue !== undefined) {
+          data[key] = cleanedValue;
+        }
+      } else {
+        data[key] = value;
       }
     }
-    if (stopClient) {
-      client.emit('error', new Error(`[USER_REQUIRED_ACTION] ${msg}`));
-    } else {
-      client.emit('debug', `[USER_REQUIRED_ACTION] ${msg}`);
-    }
+
+    return Object.keys(data).length > 0 ? data : undefined;
+  }
+
+  static getAllPayloadType() {
+    return payloadTypes;
+  }
+
+  static getPayloadType(codecName) {
+    return payloadTypes.find(p => p.name === codecName).payload_type;
+  }
+
+  static getSDPCodecName(portUdp, isEnableAudio) {
+    let sdpData = `v=0
+o=- 0 0 IN IP4 0.0.0.0
+s=-
+c=IN IP4 0.0.0.0
+t=0 0
+a=tool:libavformat 61.1.100
+m=video ${portUdp} RTP/AVP 105
+a=rtpmap:105 H264/90000
+a=fmtp:105 profile-level-id=42e01f;sprop-parameter-sets=Z0IAH6tAoAt2AtwEBAaQeJEV,aM4JyA==;packetization-mode=1
+${
+  isEnableAudio
+    ? `m=audio ${portUdp + 2} RTP/AVP 120
+a=rtpmap:120 opus/48000/2
+a=fmtp:120 minptime=10;useinbandfec=1`
+    : ''
+}
+a=extmap:1 urn:ietf:params:rtp-hdrext:ssrc-audio-level
+a=extmap:2 http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
+a=extmap:3 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01
+a=extmap:4 urn:ietf:params:rtp-hdrext:sdes:mid
+a=extmap:5 http://www.webrtc.org/experiments/rtp-hdrext/playout-delay
+a=extmap:6 http://www.webrtc.org/experiments/rtp-hdrext/video-content-type
+a=extmap:7 http://www.webrtc.org/experiments/rtp-hdrext/video-timing
+a=extmap:8 http://www.webrtc.org/experiments/rtp-hdrext/color-space
+a=extmap:10 urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id
+a=extmap:11 urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id
+a=extmap:13 urn:3gpp:video-orientation
+a=extmap:14 urn:ietf:params:rtp-hdrext:toffset
+`;
+    return sdpData;
   }
 }
 

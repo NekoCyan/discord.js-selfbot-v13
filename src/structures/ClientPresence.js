@@ -2,7 +2,9 @@
 
 const { Presence } = require('./Presence');
 const { TypeError } = require('../errors');
-const { Opcodes, ActivityTypes } = require('../util/Constants');
+const { ActivityTypes, Opcodes } = require('../util/Constants');
+
+const CustomStatusActivityTypes = [ActivityTypes.CUSTOM, ActivityTypes[ActivityTypes.CUSTOM]];
 
 /**
  * Represents the client's presence.
@@ -20,19 +22,9 @@ class ClientPresence extends Presence {
    */
   set(presence) {
     const packet = this._parse(presence);
-    // Parse with custom class
-    this._patch(packet, true);
-    if (typeof presence.shardId === 'undefined') {
-      this.client.ws.broadcast({ op: Opcodes.STATUS_UPDATE, d: packet });
-    } else if (Array.isArray(presence.shardId)) {
-      for (const shardId of presence.shardId) {
-        this.client.ws.shards.get(shardId).send({ op: Opcodes.STATUS_UPDATE, d: packet });
-      }
-    } else {
-      this.client.ws.shards.get(presence.shardId).send({ op: Opcodes.STATUS_UPDATE, d: packet });
-    }
-    // Parse with default class
-    // this._patch(packet, false);
+    this._patch(packet);
+    packet.activities = this.activities.map(a => a.toJSON());
+    this.client.ws.broadcast({ op: Opcodes.STATUS_UPDATE, d: packet });
     return this;
   }
 
@@ -45,29 +37,30 @@ class ClientPresence extends Presence {
   _parse({ status, since, afk, activities }) {
     const data = {
       activities: [],
-      afk: typeof afk === 'boolean' ? afk : false,
-      since: 0,
+      afk: typeof afk === 'boolean' ? afk : this.afk,
+      since: typeof since === 'number' && !Number.isNaN(since) ? this.since : 0,
       status: status ?? this.status,
     };
     if (activities?.length) {
       for (const [i, activity] of activities.entries()) {
-        if (![ActivityTypes.CUSTOM, 'CUSTOM'].includes(activity.type) && typeof activity.name !== 'string') {
-          throw new TypeError('INVALID_TYPE', `activities[${i}].name`, 'string');
+        if (typeof activity.name !== 'string') throw new TypeError('INVALID_TYPE', `activities[${i}].name`, 'string');
+
+        activity.type ??= ActivityTypes.PLAYING;
+        if (typeof activity.type === 'string') activity.type = ActivityTypes[activity.type];
+
+        if (CustomStatusActivityTypes.includes(activity.type) && !activity.state) {
+          activity.state = activity.name;
+          activity.name = 'Custom Status';
         }
-        activity.type ??= 0;
-        data.activities.push(
-          Object.assign(activity, {
-            type: typeof activity.type === 'number' ? activity.type : ActivityTypes[activity.type],
-          }),
-        );
+
+        data.activities.push(activity);
       }
     } else if (!activities && (status || afk || since) && this.activities.length) {
       data.activities.push(
-        ...this.activities.map(a =>
-          Object.assign(a, {
-            type: typeof a.type === 'number' ? a.type : ActivityTypes[a.type],
-          }),
-        ),
+        ...this.activities.map(a => {
+          if (typeof a.type === 'string') a.type = ActivityTypes[a.type];
+          return a;
+        }),
       );
     }
 

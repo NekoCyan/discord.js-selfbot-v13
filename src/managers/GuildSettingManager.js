@@ -7,19 +7,24 @@ const BaseManager = require('./BaseManager');
  * @see {@link https://luna.gitlab.io/discord-unofficial-docs/user_settings.html}
  */
 class GuildSettingManager extends BaseManager {
-  constructor(client, guildId = null) {
-    super(client);
-    /**
-     * Raw data
-     * @type {Object}
-     */
-    this.rawSetting = {};
+  #rawSetting = {};
+  constructor(guild) {
+    super(guild.client);
     /**
      * Guild Id
      * @type {?Snowflake}
      */
-    this.guildId = guildId;
+    this.guildId = guild.id;
   }
+
+  /**
+   * Raw data
+   * @type {Object}
+   */
+  get raw() {
+    return this.#rawSetting;
+  }
+
   /**
    * Get the guild
    * @type {?Guild}
@@ -28,13 +33,15 @@ class GuildSettingManager extends BaseManager {
   get guild() {
     return this.client.guilds.cache.get(this.guildId);
   }
+
   /**
    * Patch data file
    * @private
    * @param {Object} data Raw Data to patch
    */
   _patch(data = {}) {
-    this.rawSetting = Object.assign(this.rawSetting, data);
+    this.#rawSetting = Object.assign(this.#rawSetting, data);
+    this.client.emit('debug', `[SETTING > Guild ${this.guildId}] Sync setting`);
     if ('suppress_everyone' in data) {
       /**
        * Notification setting > Suppress `@everyone` and `@here`
@@ -59,9 +66,9 @@ class GuildSettingManager extends BaseManager {
     if ('message_notifications' in data) {
       /**
        * Notification setting > Message notifications
-       * * `0` = All messages
-       * * `1` = Only @mentions
-       * * `2` = Nothing
+       * * `0`: All messages
+       * * `1`: Only @mentions
+       * * `2`: Nothing
        * @type {?number}
        */
       this.messageNotifications = data.message_notifications;
@@ -118,9 +125,9 @@ class GuildSettingManager extends BaseManager {
     if ('notify_highlights' in data) {
       /**
        * Notification setting > Suppress highlights
-       * * `0` = ??? (unknown)
-       * * `1` = Enable
-       * * `2` = Disable
+       * * `0`: ??? (unknown)
+       * * `1`: Enable
+       * * `2`: Disable
        * @type {?number}
        */
       this.notifyHighlights = data.notify_highlights;

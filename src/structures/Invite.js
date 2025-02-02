@@ -1,12 +1,12 @@
 'use strict';
 
-const Buffer = require('node:buffer').Buffer;
 const Base = require('./Base');
 const { GuildScheduledEvent } = require('./GuildScheduledEvent');
 const IntegrationApplication = require('./IntegrationApplication');
 const InviteStageInstance = require('./InviteStageInstance');
 const { Error } = require('../errors');
-const { ChannelTypes, Endpoints } = require('../util/Constants');
+const { Endpoints } = require('../util/Constants');
+const InviteFlags = require('../util/InviteFlags');
 const Permissions = require('../util/Permissions');
 
 // TODO: Convert `inviter` and `channel` in this class to a getter.
@@ -29,7 +29,7 @@ class Invite extends Base {
      */
     this.guild ??= null;
     if (data.guild) {
-      this.guild = this.client.guilds.resolve(data.guild.id) ?? new InviteGuild(this.client, data.guild);
+      this.guild = this.client.guilds.cache.get(data.guild.id) ?? new InviteGuild(this.client, data.guild);
     }
 
     if ('code' in data) {
@@ -156,6 +156,8 @@ class Invite extends Base {
      * The type of the invite target:
      * * 1: STREAM
      * * 2: EMBEDDED_APPLICATION
+     * * 3: ROLE_SUBSCRIPTIONS
+     * * 4: CREATOR_PAGE
      * @typedef {number} TargetType
      * @see {@link https://discord.com/developers/docs/resources/invite#invite-object-invite-target-types}
      */
@@ -170,19 +172,37 @@ class Invite extends Base {
       this.targetType ??= null;
     }
 
+    /**
+     * The type of the invite:
+     * * 0: GUILD
+     * * 1: GROUP_DM
+     * * 2: FRIEND
+     * @typedef {number} InviteType
+     * @see {@link https://docs.discord.sex/resources/invite#invite-type}
+     */
+    if ('type' in data) {
+      /**
+       * The type of invite
+       * @type {?InviteType}
+       */
+      this.type = data.type;
+    } else {
+      this.type ??= null;
+    }
+
     if ('channel_id' in data) {
       /**
        * The channel's id this invite is for
-       * @type {Snowflake}
+       * @type {?Snowflake}
        */
       this.channelId = data.channel_id;
       this.channel = this.client.channels.cache.get(data.channel_id);
     }
 
-    if ('channel' in data && data.channel) {
+    if ('channel' in data && data.channel !== null) {
       /**
        * The channel this invite is for
-       * @type {Channel}
+       * @type {?Channel}
        */
       this.channel ??= this.client.channels._add(data.channel, this.guild, { cache: false });
       this.channelId ??= data.channel.id;
@@ -222,6 +242,16 @@ class Invite extends Base {
       this.guildScheduledEvent = new GuildScheduledEvent(this.client, data.guild_scheduled_event);
     } else {
       this.guildScheduledEvent ??= null;
+    }
+
+    if ('flags' in data) {
+      /**
+       * The flags that are applied to the invite.
+       * @type {?Readonly<InviteFlags>}
+       */
+      this.flags = new InviteFlags(data.flags).freeze();
+    } else {
+      this.flags ??= new InviteFlags().freeze();
     }
   }
 
@@ -316,53 +346,6 @@ class Invite extends Base {
 
   valueOf() {
     return this.code;
-  }
-
-  /**
-   * Join this Guild using this invite.
-   * @param {boolean} [autoVerify] Whether to automatically verify member
-   * @returns {Promise<Guild>}
-   * @example
-   * await client.fetchInvite('code').then(async invite => {
-   *   await invite.acceptInvite();
-   * });
-   */
-  async acceptInvite(autoVerify = false) {
-    if (!this.guild) throw new Error('INVITE_NO_GUILD');
-    if (this.client.guilds.cache.get(this.guild.id)) return this.guild;
-    const dataHeader = {
-      location: 'Join Guild',
-      location_guild_id: this.guild?.id,
-      location_channel_id: this.channelId,
-      location_channel_type: ChannelTypes[this.channel?.type] ?? 0,
-    };
-    await this.client.api.invites(this.code).post({
-      data: {
-        session_id: this.client.sessionId,
-      },
-      headers: {
-        'X-Context-Properties': Buffer.from(JSON.stringify(dataHeader), 'utf8').toString('base64'),
-      },
-    });
-    const guild = this.client.guilds.cache.get(this.guild.id);
-    /*
-    //
-    if (autoVerify) {
-      console.warn('Feature is under maintenance - Invite#acceptInvite(true)');
-    }
-    */
-    if (autoVerify) {
-      const getForm = await this.client.api
-        .guilds(this.guild.id)
-        ['member-verification'].get({ query: { with_guild: false, invite_code: this.code } })
-        .catch(() => {});
-      if (!getForm) return guild;
-      const form = Object.assign(getForm.form_fields[0], { response: true });
-      // Respond to the form
-      // https://discord.com/api/v9/guilds/:id/requests/@me
-      await this.client.api.guilds(this.guild.id).requests['@me'].put({ data: { form_fields: [form] } });
-    }
-    return guild;
   }
 }
 

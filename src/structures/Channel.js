@@ -12,6 +12,7 @@ let ThreadChannel;
 let VoiceChannel;
 let DirectoryChannel;
 let ForumChannel;
+let MediaChannel;
 const ChannelFlags = require('../util/ChannelFlags');
 const { ChannelTypes, ThreadChannelTypes, VoiceBasedChannelTypes } = require('../util/Constants');
 const SnowflakeUtil = require('../util/SnowflakeUtil');
@@ -53,7 +54,6 @@ class Channel extends Base {
     if ('flags' in data) {
       /**
        * The flags that are applied to the channel.
-       * <info>This is only `null` in a {@link PartialGroupDMChannel}. In all other cases, it is not `null`.</info>
        * @type {?Readonly<ChannelFlags>}
        */
       this.flags = new ChannelFlags(data.flags).freeze();
@@ -179,6 +179,14 @@ class Channel extends Base {
   }
 
   /**
+   * Indicates whether this channel is {@link ThreadOnlyChannel}.
+   * @returns {boolean}
+   */
+  isThreadOnly() {
+    return 'availableTags' in this;
+  }
+
+  /**
    * Indicates whether this channel is a {@link DirectoryChannel}
    * @returns {boolean}
    */
@@ -197,14 +205,15 @@ class Channel extends Base {
     VoiceChannel ??= require('./VoiceChannel');
     DirectoryChannel ??= require('./DirectoryChannel');
     ForumChannel ??= require('./ForumChannel');
+    MediaChannel ??= require('./MediaChannel');
 
     let channel;
     if (!data.guild_id && !guild) {
       if ((data.recipients && data.type !== ChannelTypes.GROUP_DM) || data.type === ChannelTypes.DM) {
         channel = new DMChannel(client, data);
       } else if (data.type === ChannelTypes.GROUP_DM) {
-        const PartialGroupDMChannel = require('./PartialGroupDMChannel');
-        channel = new PartialGroupDMChannel(client, data);
+        const GroupDMChannel = require('./GroupDMChannel');
+        channel = new GroupDMChannel(client, data);
       }
     } else {
       guild ??= client.guilds.cache.get(data.guild_id);
@@ -249,6 +258,10 @@ class Channel extends Base {
 
           case ChannelTypes.GUILD_FORUM:
             channel = new ForumChannel(guild, data, client);
+            break;
+
+          case ChannelTypes.GUILD_MEDIA:
+            channel = new MediaChannel(guild, data, client);
             break;
         }
         if (channel && !allowUnknownGuild) guild.channels?.cache.set(channel.id, channel);

@@ -1,8 +1,8 @@
 'use strict';
 
-const JSONBig = require('json-bigint');
+const { UserAgent } = require('./Constants');
 const Intents = require('./Intents');
-const { defaultUA } = require('../util/Constants');
+
 /**
  * Rate limit data
  * @typedef {Object} RateLimitData
@@ -29,27 +29,33 @@ const { defaultUA } = require('../util/Constants');
  */
 
 /**
+ * @typedef {Function} CaptchaSolver
+ * @param {Captcha} captcha Discord Captcha
+ * @param {string} UserAgent Current UserAgent
+ * @returns {Promise<string>} HCaptcha Token
+ * @example
+ * const Captcha = require("2captcha")
+ * // A new 'solver' instance with our API key
+ * const solver = new Captcha.Solver("<Your 2captcha api key>")
+ * function solveCaptcha(captcha, UA) {
+ *  return solver.hcaptcha(captcha.captcha_sitekey, 'discord.com', {
+ *    invisible: 1,
+ *    userAgent: UA,
+ *    data: captcha.captcha_rqdata,
+ *  }).then(res => res.data)
+ * }
+ */
+
+/**
  * Options for a client.
  * @typedef {Object} ClientOptions
- * @property {number|number[]|string} [shards] The shard's id to run, or an array of shard ids. If not specified,
- * the client will spawn {@link ClientOptions#shardCount} shards. If set to `auto`, it will fetch the
- * recommended amount of shards from Discord and spawn that amount
+ * @property {number} [DMChannelVoiceStatusSync=0] The amount of time in milliseconds that the Client to register the event with each DM channel (0=Disable)
+ * @property {number} [captchaRetryLimit=3] Captcha retry limit
+ * @property {CaptchaSolver} [captchaSolver] Captcha Solver
+ * @property {string} [TOTPKey] TOTP key for two-factor authentication
  * @property {number} [closeTimeout=5000] The amount of time in milliseconds to wait for the close frame to be received
- * from the WebSocket. Don't have this too high/low. Its best to have it between 2_000-6_000 ms.
- * @property {boolean} [checkUpdate=true] Display module update information on the screen
- * @property {boolean} [syncStatus=true] Sync state with Discord Client
- * @property {boolean} [patchVoice=false] Automatically patch @discordjs/voice module (support for call)
- * @property {string} [captchaService=null] Captcha service to use for solving captcha {@link captchaServices}
- * @property {string} [captchaKey=null] Captcha service key
- * @property {string} [captchaRetryLimit=3] Captcha retry limit
- * @property {string} [captchaWithProxy=false] Whether to use proxy for captcha solving
- * @property {string} [password=null] Your Discord account password
- * @property {boolean} [usingNewAttachmentAPI=true] Use new attachment API
- * @property {string} [interactionTimeout=15000] The amount of time in milliseconds to wait for an interaction response, before rejecting
- * @property {boolean} [autoRedeemNitro=false] Automaticlly redeems nitro codes <NOTE: there is no cooldown on the auto redeem>
- * @property {string} [proxy] Proxy to use for the WebSocket + REST connection (proxy-agent uri type) {@link https://www.npmjs.com/package/proxy-agent}.
- * @property {boolean} [DMSync=false] Automatically synchronize call status (DM and group) at startup (event synchronization) [Warning: May cause rate limit to gateway)
- * @property {number} [shardCount=1] The total amount of shards used by all processes of this bot
+ * from the WebSocket.
+ * <info>Don't have this too high/low. It's best to have it between 2000-6000 ms.</info>
  * (e.g. recommended shard count, shard count of the ShardingManager)
  * @property {CacheFactory} [makeCache] Function to create a cache.
  * You can use your own function, or the {@link Options} class to customize the Collection used for the cache.
@@ -84,25 +90,12 @@ const { defaultUA } = require('../util/Constants');
  * @property {number} [retryLimit=1] How many times to retry on 5XX errors
  * (Infinity for an indefinite amount of retries)
  * @property {boolean} [failIfNotExists=true] Default value for {@link ReplyMessageOptions#failIfNotExists}
- * @property {string[]} [userAgentSuffix] An array of additional bot info to be appended to the end of the required
- * [User Agent](https://discord.com/developers/docs/reference#user-agent) header
- * @property {PresenceData} [presence={}] Presence data to use upon login
- * @property {IntentsResolvable} [intents=131071] Intents to enable for this connection (but not using)
- * @property {number} [waitGuildTimeout=15000] Time in milliseconds that Clients with the GUILDS intent should wait for
- * @property {number} [messageCreateEventGuildTimeout=100] Time in milliseconds that Clients to register for messages with each guild
- * missing guilds to be received before starting the bot. If not specified, the default is 100 milliseconds.
+ * @property {PresenceData} [presence={ status: 'online', since: 0, activities: [], afk: false }] Presence data to use upon login
+ * @property {number} [waitGuildTimeout=15_000] Time in milliseconds that Clients with the GUILDS intent should wait for
+ * missing guilds to be received before starting the bot. If not specified, the default is 15 seconds.
  * @property {SweeperOptions} [sweepers={}] Options for cache sweeping
  * @property {WebsocketOptions} [ws] Options for the WebSocket
  * @property {HTTPOptions} [http] HTTP options
- * @property {CustomCaptchaSolver} [captchaSolver] Function to solve a captcha (custom)
- */
-
-/**
- * Function to solve a captcha
- * @typedef {function} CustomCaptchaSolver
- * @param {Captcha} captcha The captcha to solve
- * @param {string} userAgent The user agent to use for the request
- * @returns {Promise<string>} hcaptcha token
  */
 
 /**
@@ -124,6 +117,7 @@ const { defaultUA } = require('../util/Constants');
 /**
  * WebSocket options (these are left as snake_case to match the API)
  * @typedef {Object} WebsocketOptions
+ * @property {AgentOptions} [agent={}] HTTPS Agent options (WS Proxy)
  * @property {boolean} [compress=false] Whether to compress data sent on the connection
  * @property {WebSocketProperties} [properties] Properties to identify the client with
  */
@@ -136,10 +130,16 @@ const { defaultUA } = require('../util/Constants');
  */
 
 /**
+ * ProxyAgent options.
+ * @typedef {Object} ProxyAgentOptions
+ * @see {@link https://github.com/nodejs/undici/blob/main/docs/docs/api/ProxyAgent.md}
+ */
+
+/**
  * HTTP options
  * @typedef {Object} HTTPOptions
  * @property {number} [version=9] API version to use
- * @property {AgentOptions} [agent={}] HTTPS Agent options
+ * @property {ProxyAgentOptions} [agent={}] ProxyAgent options
  * @property {string} [api='https://discord.com/api'] Base URL of the API
  * @property {string} [cdn='https://cdn.discordapp.com'] Base URL of the CDN
  * @property {string} [invite='https://discord.gg'] Base URL of invites
@@ -158,24 +158,14 @@ class Options extends null {
    */
   static createDefault() {
     return {
-      jsonTransformer: object => JSONBig.stringify(object),
-      captchaSolver: captcha => Promise.reject(new Error('CAPTCHA_SOLVER_NOT_IMPLEMENTED', captcha)),
-      closeTimeout: 5_000,
-      checkUpdate: true,
-      syncStatus: true,
-      autoRedeemNitro: false,
-      captchaService: '',
-      captchaKey: null,
+      DMChannelVoiceStatusSync: 0,
       captchaRetryLimit: 3,
-      captchaWithProxy: false,
-      DMSync: false,
-      patchVoice: false,
-      password: null,
-      usingNewAttachmentAPI: true,
-      interactionTimeout: 15_000,
+      captchaSolver: () => Promise.reject(new Error('CAPTCHA_SOLVER_NOT_IMPLEMENTED')),
+      TOTPKey: null,
+      closeTimeout: 5_000,
       waitGuildTimeout: 15_000,
-      messageCreateEventGuildTimeout: 100,
       shardCount: 1,
+      shards: [0],
       makeCache: this.cacheWithLimits(this.defaultMakeCacheSettings),
       messageCacheLifetime: 0,
       messageSweepInterval: 0,
@@ -188,44 +178,38 @@ class Options extends null {
       retryLimit: 1,
       restTimeOffset: 500,
       restSweepInterval: 60,
-      failIfNotExists: false,
-      userAgentSuffix: [],
-      presence: { status: 'online', since: 0, activities: [], afk: false },
+      failIfNotExists: true,
+      presence: { status: 'online', since: 0, activities: [], afk: true },
       sweepers: {},
-      proxy: '',
       ws: {
-        // eslint-disable-next-line no-undef
         capabilities: 0, // https://discord-userdoccers.vercel.app/topics/gateway#gateway-capabilities
         properties: {
           os: 'Windows',
-          browser: 'Discord Client',
+          browser: 'Chrome',
+          device: '',
+          system_locale: 'vi-VN',
+          browser_user_agent: UserAgent,
+          browser_version: '131.0.0.0',
+          os_version: '10',
+          referrer: '',
+          referring_domain: '',
+          referrer_current: '',
+          referring_domain_current: '',
           release_channel: 'stable',
-          client_version: '1.0.9015',
-          os_version: '10.0.19045',
-          os_arch: 'x64',
-          system_locale: 'en-US',
-          browser_user_agent: defaultUA,
-          browser_version: '22.3.12',
-          client_build_number: 215527,
-          native_build_number: 34898,
+          client_build_number: 360320,
           client_event_source: null,
         },
         compress: false,
         client_state: {
           guild_versions: {},
-          highest_last_message_id: '0',
-          read_state_version: 0,
-          user_guild_settings_version: -1,
-          user_settings_version: -1,
-          private_channels_version: '0',
-          api_code_version: 0,
         },
         version: 9,
+        agent: {},
       },
       http: {
         agent: {},
         headers: {
-          'User-Agent': defaultUA,
+          'User-Agent': UserAgent,
         },
         version: 9,
         api: 'https://discord.com/api',
@@ -326,7 +310,6 @@ class Options extends null {
   static get defaultMakeCacheSettings() {
     return {
       MessageManager: 200,
-      /*
       ChannelManager: {
         sweepInterval: 3600,
         sweepFilter: require('./Util').archivedThreadSweepFilter(),
@@ -339,7 +322,6 @@ class Options extends null {
         sweepInterval: 3600,
         sweepFilter: require('./Util').archivedThreadSweepFilter(),
       },
-      */
     };
   }
 }

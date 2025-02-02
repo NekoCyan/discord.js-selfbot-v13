@@ -224,7 +224,6 @@ class GuildAuditLogs {
         this.applicationCommands.set(command.id, new ApplicationCommand(guild.client, command, guild));
       }
     }
-
     /**
      * Cached auto moderation rules.
      * @type {Collection<Snowflake, AutoModerationRule>}
@@ -458,7 +457,12 @@ class GuildAuditLogsEntry {
      * Specific property changes
      * @type {AuditLogChange[]}
      */
-    this.changes = data.changes?.map(c => ({ key: c.key, old: c.old_value, new: c.new_value })) ?? [];
+    this.changes =
+      data.changes?.map(change => ({
+        key: change.key,
+        ...('old_value' in change ? { old: change.old_value } : {}),
+        ...('new_value' in change ? { new: change.new_value } : {}),
+      })) ?? [];
 
     /**
      * The entry's id
@@ -487,7 +491,6 @@ class GuildAuditLogsEntry {
           count: Number(data.options.count),
         };
         break;
-
       case Actions.MESSAGE_PIN:
       case Actions.MESSAGE_UNPIN:
         this.extra = {
@@ -533,13 +536,11 @@ class GuildAuditLogsEntry {
           channel: guild.client.channels.cache.get(data.options?.channel_id) ?? { id: data.options?.channel_id },
         };
         break;
-
       case Actions.APPLICATION_COMMAND_PERMISSION_UPDATE:
         this.extra = {
           applicationId: data.options.application_id,
         };
         break;
-
       case Actions.AUTO_MODERATION_BLOCK_MESSAGE:
       case Actions.AUTO_MODERATION_FLAG_TO_CHANNEL:
       case Actions.AUTO_MODERATION_USER_COMMUNICATION_DISABLED:
@@ -549,7 +550,6 @@ class GuildAuditLogsEntry {
           channel: guild.client.channels.cache.get(data.options?.channel_id) ?? { id: data.options?.channel_id },
         };
         break;
-
       default:
         break;
     }

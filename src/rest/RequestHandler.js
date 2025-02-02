@@ -2,14 +2,14 @@
 
 const { setTimeout } = require('node:timers');
 const { setTimeout: sleep } = require('node:timers/promises');
-const { inspect } = require('util');
 const { AsyncQueue } = require('@sapphire/async-queue');
 const DiscordAPIError = require('./DiscordAPIError');
 const HTTPError = require('./HTTPError');
 const RateLimitError = require('./RateLimitError');
 const {
-  Events: { DEBUG, RATE_LIMIT, INVALID_REQUEST_WARNING, API_RESPONSE, API_REQUEST, CAPTCHA_REQUIRED },
+  Events: { DEBUG, RATE_LIMIT, INVALID_REQUEST_WARNING, API_RESPONSE, API_REQUEST },
 } = require('../util/Constants');
+const TOTP = require('../util/Totp');
 
 const captchaMessage = [
   'incorrect-captcha',
@@ -19,11 +19,13 @@ const captchaMessage = [
   'invalid-response',
   'You need to update your app',
   'response-already-used-error',
+  'rqkey-mismatch',
+  'sitekey-secret-mismatch',
 ];
 
 function parseResponse(res) {
   if (res.headers.get('content-type')?.startsWith('application/json')) return res.json();
-  return res.arrayBuffer(); // Cre: TheDevYellowy
+  return res.arrayBuffer();
 }
 
 function getAPIOffset(serverDate) {
@@ -354,50 +356,72 @@ class RequestHandler {
       let data;
       try {
         data = await parseResponse(res);
-        if (data?.captcha_service) {
-          /**
-           * Emitted when a request is blocked by a captcha
-           * @event Client#captchaRequired
-           * @param {Request} request The request that was blocked
-           * @param {Captcha} data The data returned by Discord
-           */
-          this.manager.client.emit(CAPTCHA_REQUIRED, request, data);
-        }
+        // Captcha
         if (
           data?.captcha_service &&
-          this.manager.client.options.captchaService &&
+          typeof this.manager.client.options.captchaSolver == 'function' &&
           request.retries < this.manager.client.options.captchaRetryLimit &&
           captchaMessage.some(s => data.captcha_key[0].includes(s))
         ) {
           // Retry the request after a captcha is solved
           this.manager.client.emit(
             DEBUG,
-            `Hit a captcha while executing a request. Solving captcha ...
+            `Hit a captcha while executing a request (${data.captcha_key.join(', ')})
     Method  : ${request.method}
     Path    : ${request.path}
     Route   : ${request.route}
-    Info    : ${inspect(data, { depth: null })}`,
+    Sitekey : ${data.captcha_sitekey}
+    rqToken : ${data.captcha_rqtoken}`,
           );
-          const captcha = await this.manager.captchaService.solve(
-            data,
-            this.manager.client.options.http.headers['User-Agent'],
-          );
-          // Sleep: await this.manager.client.sleep(5_000);
+          const captcha = await this.manager.client.options.captchaSolver(data, request.fullUserAgent);
           this.manager.client.emit(
             DEBUG,
             `Captcha details:
     Method  : ${request.method}
     Path    : ${request.path}
     Route   : ${request.route}
-    Key     : ${captcha ? `${captcha.slice(0, 30)}...` : '[Captcha not solved]'}
+    Key     : ${captcha ? `${captcha.slice(0, 120)}...` : '[Captcha not solved]'}
     rqToken : ${data.captcha_rqtoken}`,
           );
           request.retries++;
           return this.execute(request, captcha, data.captcha_rqtoken);
         }
+        // Two factor handling
+        if (
+          data?.code &&
+          data.code == 60003 && // Two factor is required for this operation
+          data.mfa.methods.find(o => o.type === 'totp') && // TOTP is available
+          typeof this.manager.client.options.TOTPKey === 'string' &&
+          request.options.auth !== false &&
+          request.retries < 1
+        ) {
+          // Get mfa code
+          const { otp } = await TOTP.generate(this.options.TOTPKey);
+          this.manager.client.emit(
+            DEBUG,
+            `${data.message}
+    Method  : ${request.method}
+    Path    : ${request.path}
+    Route   : ${request.route}
+    mfaCode : ${otp}`,
+          );
+          // Get ticket
+          const mfaData = data.mfa;
+          const mfaPost = await this.manager.client.api.mfa.finish.post({
+            data: {
+              ticket: mfaData.ticket,
+              data: otp,
+              mfa_type: 'totp',
+            },
+          });
+          request.options.mfaToken = mfaPost.token;
+          request.retries++;
+          return this.execute(request);
+        }
       } catch (err) {
         throw new HTTPError(err.message, err.constructor.name, err.status, request);
       }
+
       throw new DiscordAPIError(data, res.status, request);
     }
 

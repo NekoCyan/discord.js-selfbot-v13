@@ -54,7 +54,7 @@ class ThreadMemberManager extends CachedManager {
    * @readonly
    */
   get me() {
-    return this.resolve(this.client.user.id);
+    return this.cache.get(this.client.user.id) ?? null;
   }
 
   /**
@@ -72,8 +72,8 @@ class ThreadMemberManager extends CachedManager {
   resolve(member) {
     const memberResolvable = super.resolve(member);
     if (memberResolvable) return memberResolvable;
-    const userResolvable = this.client.users.resolveId(member);
-    if (userResolvable) return super.resolve(userResolvable);
+    const userId = this.client.users.resolveId(member);
+    if (userId) return this.cache.get(userId) ?? null;
     return null;
   }
 
@@ -179,7 +179,7 @@ class ThreadMemberManager extends CachedManager {
     const id = this.resolveId(member);
     return id
       ? this._fetchOne(id, options)
-      : this._fetchMany(typeof member !== 'boolean' ? member : { ...options, cache: member });
+      : this._fetchMany(typeof member === 'boolean' ? { ...options, cache: member } : options);
   }
 }
 
