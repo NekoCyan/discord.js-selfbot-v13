@@ -17,13 +17,18 @@ class InviteFlags extends BitField {}
 
 /**
  * Numeric the Discord invite flags. All available properties:
- * * `GUEST`
- * * `VIEWED`
+ * * `IS_GUEST_INVITE`
+ * * `IS_VIEWED`
+ * * `IS_ENHANCED`
+ * * `IS_APPLICATION_BYPASS`
  * @type {Object}
+ * @see {@link https://docs.discord.food/resources/invite#invite-flags}
  */
 InviteFlags.FLAGS = {
-  GUEST: 1 << 0,
-  VIEWED: 1 << 1,
+  IS_GUEST_INVITE: 1 << 0,
+  IS_VIEWED: 1 << 1,
+  IS_ENHANCED: 1 << 2,
+  IS_APPLICATION_BYPASS: 1 << 3,
 };
 
 module.exports = InviteFlags;

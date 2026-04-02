@@ -30,6 +30,7 @@ class MessageButton extends BaseMessageComponent {
   }
 
   setup(data) {
+    super.setup(data);
     /**
      * The text to be displayed on this button
      * @type {?string}

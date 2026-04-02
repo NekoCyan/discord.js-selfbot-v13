@@ -107,7 +107,9 @@ class ThreadChannel extends Channel {
        * created</info>
        * @type {?number}
        */
-      this.archiveTimestamp = new Date(data.thread_metadata.archive_timestamp).getTime();
+      this.archiveTimestamp = data.thread_metadata?.archive_timestamp
+        ? Date.parse(data.thread_metadata.archive_timestamp)
+        : null;
 
       if ('create_timestamp' in data.thread_metadata) {
         // Note: this is needed because we can't assign directly to getters
@@ -341,7 +343,7 @@ class ThreadChannel extends Channel {
 
     const newData = await this.client.api.channels(this.id).patch({
       data: {
-        name: (data.name ?? this.name).trim(),
+        name: data.name,
         archived: data.archived,
         auto_archive_duration: autoArchiveDuration,
         rate_limit_per_user: data.rateLimitPerUser,
@@ -396,8 +398,8 @@ class ThreadChannel extends Channel {
    * @param {string} [reason] Reason for changing invite
    * @returns {Promise<ThreadChannel>}
    */
-  setInvitable(invitable = true, reason) {
-    if (this.type !== 'GUILD_PRIVATE_THREAD') return Promise.reject(new RangeError('THREAD_INVITABLE_TYPE', this.type));
+  async setInvitable(invitable = true, reason) {
+    if (this.type !== 'GUILD_PRIVATE_THREAD') throw new RangeError('THREAD_INVITABLE_TYPE', this.type);
     return this.edit({ invitable }, reason);
   }
 

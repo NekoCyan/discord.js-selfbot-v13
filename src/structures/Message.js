@@ -160,10 +160,14 @@ class Message extends Base {
       this.embeds = this.embeds?.slice() ?? [];
     }
 
+    /**
+     * @typedef {MessageActionRow|ContainerComponent|FileComponent|MediaGalleryComponent|SectionComponent|SeparatorComponent|TextDisplayComponent} TopLevelComponent
+     */
+
     if ('components' in data) {
       /**
-       * A list of MessageActionRows in the message
-       * @type {MessageActionRow[]}
+       * An array of components in the message
+       * @type {TopLevelComponent[]}
        */
       this.components = data.components.map(c => BaseMessageComponent.create(c, this.client));
     } else {
@@ -203,7 +207,7 @@ class Message extends Base {
        * The timestamp the message was last edited at (if applicable)
        * @type {?number}
        */
-      this.editedTimestamp = new Date(data.edited_timestamp).getTime();
+      this.editedTimestamp = data.edited_timestamp ? Date.parse(data.edited_timestamp) : null;
     } else {
       this.editedTimestamp ??= null;
     }
@@ -382,7 +386,7 @@ class Message extends Base {
 
     if (data.message_snapshots) {
       /**
-       * The message associated with the message reference
+       * The message snapshots associated with the message reference
        * @type {Collection<Snowflake, Message>}
        */
       this.messageSnapshots = data.message_snapshots.reduce((coll, snapshot) => {
@@ -603,7 +607,10 @@ class Message extends Base {
    */
   get editable() {
     const precheck = Boolean(
-      this.author.id === this.client.user.id && !deletedMessages.has(this) && (!this.guild || this.channel?.viewable),
+      this.author.id === this.client.user.id &&
+        !deletedMessages.has(this) &&
+        (!this.guild || this.channel?.viewable) &&
+        this.reference?.type !== 'FORWARD',
     );
 
     // Regardless of permissions thread messages cannot be edited if
@@ -703,6 +710,7 @@ class Message extends Base {
     return Boolean(
       channel?.type === 'GUILD_NEWS' &&
         !this.flags.has(MessageFlags.FLAGS.CROSSPOSTED) &&
+        this.reference?.type !== 'FORWARD' &&
         this.type === 'DEFAULT' &&
         !this.poll &&
         channel.viewable &&
@@ -735,8 +743,8 @@ class Message extends Base {
    *   .then(msg => console.log(`Updated the content of a message to ${msg.content}`))
    *   .catch(console.error);
    */
-  edit(options) {
-    if (!this.channel) return Promise.reject(new Error('CHANNEL_NOT_CACHED'));
+  async edit(options) {
+    if (!this.channel) throw new Error('CHANNEL_NOT_CACHED');
     return this.channel.messages.edit(this, options);
   }
 
@@ -751,8 +759,8 @@ class Message extends Base {
    *     .catch(console.error);
    * }
    */
-  crosspost() {
-    if (!this.channel) return Promise.reject(new Error('CHANNEL_NOT_CACHED'));
+  async crosspost() {
+    if (!this.channel) throw new Error('CHANNEL_NOT_CACHED');
     return this.channel.messages.crosspost(this.id);
   }
 
@@ -853,8 +861,8 @@ class Message extends Base {
    *   .then(() => console.log(`Replied to message "${message.content}"`))
    *   .catch(console.error);
    */
-  reply(options) {
-    if (!this.channel) return Promise.reject(new Error('CHANNEL_NOT_CACHED'));
+  async reply(options) {
+    if (!this.channel) throw new Error('CHANNEL_NOT_CACHED');
     let data;
 
     if (options instanceof MessagePayload) {
@@ -871,26 +879,20 @@ class Message extends Base {
   }
 
   /**
-   * Forwards this message to a channel.
-   * @param {TextBasedChannelResolvable} channel The channel to forward the message to
+   * Forwards this message
+   * @param {TextBasedChannelResolvable} channel The channel to forward this message to.
    * @returns {Promise<Message>}
    */
   forward(channel) {
-    channel = this.client.channels.resolve(channel);
-    if (!channel || !this.channelId) return Promise.reject(new Error('CHANNEL_NOT_CACHED'));
-    const data = MessagePayload.create(
-      this,
-      {},
-      {
-        forward: {
-          channel_id: this.channelId,
-          guild_id: this.guildId,
-          message_id: this.id,
-          type: 1,
-        },
+    const resolvedChannel = this.client.channels.resolve(channel);
+    if (!resolvedChannel) throw new Error('INVALID_TYPE', 'channel', 'TextBasedChannelResolvable');
+    return resolvedChannel.send({
+      forward: {
+        message: this.id,
+        channel: this.channelId,
+        guild: this.guildId,
       },
-    );
-    return channel.send(data);
+    });
   }
 
   /**
@@ -921,12 +923,12 @@ class Message extends Base {
    * @param {StartThreadOptions} [options] Options for starting a thread on this message
    * @returns {Promise<ThreadChannel>}
    */
-  startThread(options = {}) {
-    if (!this.channel) return Promise.reject(new Error('CHANNEL_NOT_CACHED'));
+  async startThread(options = {}) {
+    if (!this.channel) throw new Error('CHANNEL_NOT_CACHED');
     if (!['GUILD_TEXT', 'GUILD_NEWS'].includes(this.channel.type)) {
-      return Promise.reject(new Error('MESSAGE_THREAD_PARENT'));
+      throw new Error('MESSAGE_THREAD_PARENT');
     }
-    if (this.hasThread) return Promise.reject(new Error('MESSAGE_EXISTING_THREAD'));
+    if (this.hasThread) throw new Error('MESSAGE_EXISTING_THREAD');
     return this.channel.threads.create({ ...options, startMessage: this });
   }
 
@@ -956,8 +958,8 @@ class Message extends Base {
    * @param {boolean} [force=true] Whether to skip the cache check and request the API
    * @returns {Promise<Message>}
    */
-  fetch(force = true) {
-    if (!this.channel) return Promise.reject(new Error('CHANNEL_NOT_CACHED'));
+  async fetch(force = true) {
+    if (!this.channel) throw new Error('CHANNEL_NOT_CACHED');
     return this.channel.messages.fetch(this.id, { force });
   }
 
@@ -965,9 +967,9 @@ class Message extends Base {
    * Fetches the webhook used to create this message.
    * @returns {Promise<?Webhook>}
    */
-  fetchWebhook() {
-    if (!this.webhookId) return Promise.reject(new Error('WEBHOOK_MESSAGE'));
-    if (this.webhookId === this.applicationId) return Promise.reject(new Error('WEBHOOK_APPLICATION'));
+  async fetchWebhook() {
+    if (!this.webhookId) throw new Error('WEBHOOK_MESSAGE');
+    if (this.webhookId === this.applicationId) throw new Error('WEBHOOK_APPLICATION');
     return this.client.fetchWebhook(this.webhookId);
   }
 
@@ -1002,7 +1004,11 @@ class Message extends Base {
    * @returns {?MessageActionRowComponent}
    */
   resolveComponent(customId) {
-    return this.components.flatMap(row => row.components).find(component => component.customId === customId) ?? null;
+    return (
+      this.components
+        .flatMap(BaseMessageComponent.extractInteractiveComponents)
+        .find(component => (component.customId ?? component.custom_id) === customId) ?? null
+    );
   }
 
   /**
@@ -1081,49 +1087,20 @@ class Message extends Base {
   }
 
   /**
-   * Click specific button with X and Y
-   * @typedef {Object} MessageButtonLocation
-   * @property {number} X Index of the row
-   * @property {number} Y Index of the column
-   */
-
-  /**
-   * Click specific button or automatically click first button if no button is specified.
-   * @param {MessageButtonLocation|string|undefined} button button
+   * Click a specified button in the message based on the button's CustomID
+   * @param {string} buttonid customId of the button to click
+   *
+   * To be compatible with Components V2, the following methods have been removed in this version:
+   * - Clicking by coordinates (using ActionRow)
+   * - Clicking the first button in the message
+   *
+   * Currently, only clicking by CustomID is supported.
    * @returns {Promise<Message|Modal>}
-   * @example
-   * // Demo msg
-   * Some content
-   *  ――――――――――――――――――――――――――――――――> X from 0
-   *  │ [button1] [button2] [button3]
-   *  │ [button4] [button5] [button6]
-   *  ↓
-   *  Y from 0
-   * // Click button6 with X and Y
-   * [0,0] [1,0] [2,0]
-   * [0,1] [1,1] [2,1]
-   * // Code
-   * message.clickButton({
-   *  X: 2, Y: 1,
-   * });
-   * // Click button with customId (Ex button 5)
-   * message.clickButton('button5');
-   * // Click button 1
-   * message.clickButton();
    */
-  clickButton(button) {
-    if (typeof button == 'undefined') {
-      button = this.components
-        .flatMap(row => row.components)
-        .find(b => b.type === 'BUTTON' && b.customId && !b.disabled);
-    } else if (typeof button == 'string') {
-      button = this.components.flatMap(row => row.components).find(b => b.type === 'BUTTON' && b.customId == button);
-    } else {
-      button = this.components[button.Y]?.components[button.X];
-    }
-    if (!button) throw new TypeError('BUTTON_NOT_FOUND');
-    button = button.toJSON();
-    if (!button.custom_id || button.disabled) throw new TypeError('BUTTON_CANNOT_CLICK');
+  clickButton(buttonid) {
+    const button = this.resolveComponent(buttonid);
+    if (!button || button.type !== 'BUTTON') throw new TypeError('BUTTON_NOT_FOUND');
+    if (button.disabled) throw new TypeError('BUTTON_CANNOT_CLICK');
     const nonce = SnowflakeUtil.generate();
     const data = {
       type: InteractionTypes.MESSAGE_COMPONENT,
@@ -1136,7 +1113,7 @@ class Message extends Base {
       message_flags: this.flags.bitfield,
       data: {
         component_type: MessageComponentTypes.BUTTON,
-        custom_id: button.custom_id,
+        custom_id: button.customId,
       },
     };
     this.client.api.interactions.post({

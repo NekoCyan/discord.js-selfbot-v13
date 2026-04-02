@@ -52,6 +52,23 @@ class BaseMessageComponent {
     this.type = 'type' in data ? BaseMessageComponent.resolveType(data.type) : null;
   }
 
+  setup(data) {
+    /**
+     * The data for this component
+     * @type {MessageComponentOptions}
+     */
+    this.data = data;
+  }
+
+  /**
+   * The id of this component
+   * @type {number}
+   * @readonly
+   */
+  get id() {
+    return this.data.id;
+  }
+
   /**
    * Constructs a component based on the type of the incoming data
    * @param {MessageComponentOptions} data Data for a MessageComponent
@@ -90,6 +107,41 @@ class BaseMessageComponent {
         component = data instanceof TextInputComponent ? data : new TextInputComponent(data);
         break;
       }
+      case MessageComponentTypes.SECTION: {
+        const SectionComponent = require('./SectionComponent');
+        component = data instanceof SectionComponent ? data : new SectionComponent(data);
+        break;
+      }
+      case MessageComponentTypes.TEXT_DISPLAY: {
+        const TextDisplayComponent = require('./TextDisplayComponent');
+        component = data instanceof TextDisplayComponent ? data : new TextDisplayComponent(data);
+        break;
+      }
+      case MessageComponentTypes.THUMBNAIL: {
+        const ThumbnailComponent = require('./ThumbnailComponent');
+        component = data instanceof ThumbnailComponent ? data : new ThumbnailComponent(data);
+        break;
+      }
+      case MessageComponentTypes.MEDIA_GALLERY: {
+        const MediaGalleryComponent = require('./MediaGalleryComponent');
+        component = data instanceof MediaGalleryComponent ? data : new MediaGalleryComponent(data);
+        break;
+      }
+      case MessageComponentTypes.FILE: {
+        const FileComponent = require('./FileComponent');
+        component = data instanceof FileComponent ? data : new FileComponent(data);
+        break;
+      }
+      case MessageComponentTypes.SEPARATOR: {
+        const SeparatorComponent = require('./SeparatorComponent');
+        component = data instanceof SeparatorComponent ? data : new SeparatorComponent(data);
+        break;
+      }
+      case MessageComponentTypes.CONTAINER: {
+        const ContainerComponent = require('./ContainerComponent');
+        component = data instanceof ContainerComponent ? data : new ContainerComponent(data);
+        break;
+      }
       default:
         if (client) {
           client.emit(Events.DEBUG, `[BaseMessageComponent] Received component with unknown type: ${data.type}`);
@@ -108,6 +160,21 @@ class BaseMessageComponent {
    */
   static resolveType(type) {
     return typeof type === 'string' ? type : MessageComponentTypes[type];
+  }
+
+  static extractInteractiveComponents(component) {
+    let type = component.type;
+    if (typeof type === 'string') type = MessageComponentTypes[type];
+    switch (type) {
+      case MessageComponentTypes.ACTION_ROW:
+        return component.components;
+      case MessageComponentTypes.SECTION:
+        return [...component.components, component.accessory];
+      case MessageComponentTypes.CONTAINER:
+        return component.components.flatMap(BaseMessageComponent.extractInteractiveComponents);
+      default:
+        return [component];
+    }
   }
 }
 

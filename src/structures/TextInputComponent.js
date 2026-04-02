@@ -33,6 +33,7 @@ class TextInputComponent extends BaseMessageComponent {
   }
 
   setup(data) {
+    super.setup(data);
     /**
      * A unique string to be sent in the interaction when submitted
      * @type {?string}

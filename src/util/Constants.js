@@ -9,10 +9,10 @@ const { Error, RangeError, TypeError } = require('../errors');
 exports.MaxBulkDeletableMessageAge = 1_209_600_000;
 
 exports.UserAgent =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Electron/33.0.0 Safari/537.36';
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) discord/1.0.9210 Chrome/134.0.6998.205 Electron/35.3.0 Safari/537.36';
 
 /**
- * Google Chrome v131 TLS ciphers
+ * Chrome TLS ciphers
  * @see {@link https://tls.browserleaks.com/tls}
  * @see {@link https://github.com/yifeikong/curl-impersonate}
  * @typedef {Array<string>} Ciphers
@@ -96,9 +96,8 @@ exports.Endpoints = {
         if (dynamic && hash.startsWith('a_')) format = 'gif';
         return makeImageUrl(`${root}/avatars/${userId}/${hash}`, { format, size });
       },
-      AvatarDecoration: (hash, size) =>
-        makeImageUrl(`${root}/avatar-decoration-presets/${hash}`, { format: 'png', size }),
-      ClanBadge: (guildId, hash) => `${root}/clan-badges/${guildId}/${hash}.png`,
+      AvatarDecoration: hash => makeImageUrl(`${root}/avatar-decoration-presets/${hash}`, { format: 'png' }),
+      GuildTagBadge: (guildId, hash) => `${root}/guild-tag-badges/${guildId}/${hash}.png`,
       GuildMemberAvatar: (guildId, memberId, hash, format = 'webp', size, dynamic = false) => {
         if (dynamic && hash.startsWith('a_')) format = 'gif';
         return makeImageUrl(`${root}/guilds/${guildId}/users/${memberId}/avatars/${hash}`, { format, size });
@@ -737,7 +736,7 @@ exports.IntegrationExpireBehaviors = createEnum(['REMOVE_ROLE', 'KICK']);
  * * NITRO_NOTIFICATION
  * @typedef {string} MessageType
  * @see {@link https://discord.com/developers/docs/resources/channel#message-object-message-types}
- * @see {@link https://docs.discord.sex/resources/message#message-type}
+ * @see {@link https://docs.discord.food/resources/message#message-type}
  */
 exports.MessageTypes = [
   'DEFAULT', // 0
@@ -798,10 +797,10 @@ exports.MessageTypes = [
  * @typedef {string} MessageReferenceType
  * @see {@link https://discord.com/developers/docs/resources/message#message-reference-types}
  */
-exports.MessageReferenceTypes = [
+exports.MessageReferenceTypes = createEnum([
   'DEFAULT', // 0
   'FORWARD',
-];
+]);
 
 /**
  * The name of an item to be swept in Sweepers
@@ -1043,6 +1042,21 @@ exports.Colors = {
   GREYPLE: 0x99aab5,
   DARK_BUT_NOT_BLACK: 0x2c2f33,
   NOT_QUITE_BLACK: 0x23272a,
+};
+
+/**
+ * Holographic color values for role styling.
+ * When using `tertiaryColor`, the API enforces these specific values for holographic effect.
+ *
+ * * PRIMARY: 11127295 (0xA9FFFF)
+ * * SECONDARY: 16759788 (0xFFCCCC)
+ * * TERTIARY: 16761760 (0xFFE0A0)
+ * @typedef {Object<string, number>} HolographicStyle
+ */
+exports.HolographicStyles = {
+  PRIMARY: 11_127_295,
+  SECONDARY: 16_759_788,
+  TERTIARY: 16_761_760,
 };
 
 /**
@@ -1615,6 +1629,15 @@ exports.MessageComponentTypes = createEnum([
   'ROLE_SELECT',
   'MENTIONABLE_SELECT',
   'CHANNEL_SELECT',
+  'SECTION',
+  'TEXT_DISPLAY',
+  'THUMBNAIL',
+  'MEDIA_GALLERY',
+  'FILE',
+  'SEPARATOR',
+  null,
+  null,
+  'CONTAINER',
 ]);
 
 /**
@@ -1771,7 +1794,7 @@ exports.ForumLayoutTypes = createEnum(['NOT_SET', 'LIST_VIEW', 'GALLERY_VIEW']);
  * * DEFAULT
  * * IMAGE_ONLY_ANSWERS
  * @typedef {string} PollLayoutType
- * @see {@link https://docs.discord.sex/resources/message#poll-layout-type}
+ * @see {@link https://docs.discord.food/resources/message#poll-layout-type}
  */
 exports.PollLayoutTypes = createEnum([null, 'DEFAULT', 'IMAGE_ONLY_ANSWERS']);
 
@@ -1795,6 +1818,8 @@ exports.RelationshipTypes = createEnum([
   'PENDING_OUTGOING',
   'IMPLICIT',
 ]);
+
+exports.SeparatorSpacingSizes = createEnum([null, 'SMALL', 'LARGE']);
 
 exports._cleanupSymbol = Symbol('djsCleanup');
 
@@ -1855,6 +1880,7 @@ function createEnum(keys) {
  * @property {Object<InteractionType, number>} InteractionTypes The type of an {@link Interaction} object.
  * @property {InviteScope[]} InviteScopes The scopes of an invite.
  * @property {Object<RelationshipType, number>} RelationshipTypes Relationship Enums
+ * @property {Object<SeparatorSpacingSize, number>} SeparatorSpacingSize Size of separator padding (Enums)
  * @property {Object<MembershipState, number>} MembershipStates The value set for a team members membership state.
  * @property {Object<MessageButtonStyle, number>} MessageButtonStyles The style of a message button.
  * @property {Object<MessageComponentType, number>} MessageComponentTypes The type of a message component.
@@ -1884,4 +1910,5 @@ function createEnum(keys) {
  * @property {Object<WebhookType, number>} WebhookTypes The value set for a webhooks type.
  * @property {WSCodes} WSCodes The types of WebSocket error codes.
  * @property {Object<WSEventType, WSEventType>} WSEvents The type of a WebSocket message event.
+ * @property {HolographicStyle} HolographicStyles Holographic color values for role styling.
  */

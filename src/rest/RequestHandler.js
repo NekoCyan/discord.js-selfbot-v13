@@ -9,7 +9,6 @@ const RateLimitError = require('./RateLimitError');
 const {
   Events: { DEBUG, RATE_LIMIT, INVALID_REQUEST_WARNING, API_RESPONSE, API_REQUEST },
 } = require('../util/Constants');
-const TOTP = require('../util/Totp');
 
 const captchaMessage = [
   'incorrect-captcha',
@@ -333,7 +332,7 @@ class RequestHandler {
 
         this.manager.client.emit(
           DEBUG,
-          `Hit a 429 while executing a request.
+          `[Request Handler] Hit a 429 while executing a request.
     Global  : ${isGlobal}
     Method  : ${request.method}
     Path    : ${request.path}
@@ -366,7 +365,7 @@ class RequestHandler {
           // Retry the request after a captcha is solved
           this.manager.client.emit(
             DEBUG,
-            `Hit a captcha while executing a request (${data.captcha_key.join(', ')})
+            `[Request Handler] Hit a captcha while executing a request (${data.captcha_key.join(', ')})
     Method  : ${request.method}
     Path    : ${request.path}
     Route   : ${request.route}
@@ -376,7 +375,7 @@ class RequestHandler {
           const captcha = await this.manager.client.options.captchaSolver(data, request.fullUserAgent);
           this.manager.client.emit(
             DEBUG,
-            `Captcha details:
+            `[Request Handler] Captcha details:
     Method  : ${request.method}
     Path    : ${request.path}
     Route   : ${request.route}
@@ -387,36 +386,49 @@ class RequestHandler {
           return this.execute(request, captcha, data.captcha_rqtoken);
         }
         // Two factor handling
-        if (
-          data?.code &&
-          data.code == 60003 && // Two factor is required for this operation
-          data.mfa.methods.find(o => o.type === 'totp') && // TOTP is available
-          typeof this.manager.client.options.TOTPKey === 'string' &&
-          request.options.auth !== false &&
-          request.retries < 1
-        ) {
-          // Get mfa code
-          const { otp } = await TOTP.generate(this.options.TOTPKey);
-          this.manager.client.emit(
-            DEBUG,
-            `${data.message}
+        if (data?.code && data.code == 60003 && request.options.auth !== false && request.retries < 1) {
+          // https://gist.github.com/Dziurwa14/de2498e5ee28d2089f095aa037957cbb
+          // 60003: Two factor is required for this operation
+          /**
+           * {
+           *     message: "Two factor is required for this operation";
+           *     code: 60003;
+           *     mfa: {
+           *         ticket: string;
+           *         methods: {
+           *             type: "password" | "totp" | "sms" | "backup" | "webauthn";
+           *             backup_codes_allowed?: boolean;
+           *         }[];
+           *     };
+           * };
+           */
+          if (
+            data.mfa.methods.find(o => o.type === 'totp') &&
+            typeof this.manager.client.options.TOTPKey === 'string'
+          ) {
+            // Get mfa code
+            const otp = this.manager.client.authenticator.generate(this.manager.client.options.TOTPKey);
+            this.manager.client.emit(
+              DEBUG,
+              `[Request Handler] ${data.message}
     Method  : ${request.method}
     Path    : ${request.path}
     Route   : ${request.route}
     mfaCode : ${otp}`,
-          );
-          // Get ticket
-          const mfaData = data.mfa;
-          const mfaPost = await this.manager.client.api.mfa.finish.post({
-            data: {
-              ticket: mfaData.ticket,
-              data: otp,
-              mfa_type: 'totp',
-            },
-          });
-          request.options.mfaToken = mfaPost.token;
-          request.retries++;
-          return this.execute(request);
+            );
+            // Get ticket
+            const mfaData = data.mfa;
+            const mfaPost = await this.manager.client.api.mfa.finish.post({
+              data: {
+                ticket: mfaData.ticket,
+                data: otp,
+                mfa_type: 'totp',
+              },
+            });
+            request.options.mfaToken = mfaPost.token;
+            request.retries++;
+            return this.execute(request);
+          }
         }
       } catch (err) {
         throw new HTTPError(err.message, err.constructor.name, err.status, request);
@@ -445,10 +457,10 @@ module.exports = RequestHandler;
 
 /**
  * @external HTTPMethod
- * @see {@link https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods}
+ * @see {@link https://developer.mozilla.org/docs/Web/HTTP/Methods}
  */
 
 /**
  * @external Response
- * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Response}
+ * @see {@link https://developer.mozilla.org/docs/Web/API/Response}
  */

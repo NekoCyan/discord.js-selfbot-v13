@@ -1,5 +1,6 @@
 'use strict';
 
+const { randomUUID } = require('node:crypto');
 const { UserAgent } = require('./Constants');
 const Intents = require('./Intents');
 
@@ -52,7 +53,10 @@ const Intents = require('./Intents');
  * @property {number} [DMChannelVoiceStatusSync=0] The amount of time in milliseconds that the Client to register the event with each DM channel (0=Disable)
  * @property {number} [captchaRetryLimit=3] Captcha retry limit
  * @property {CaptchaSolver} [captchaSolver] Captcha Solver
- * @property {string} [TOTPKey] TOTP key for two-factor authentication
+ * @property {string} [TOTPKey] TOTP key / 2FA Key for two-factor authentication
+ * This is a 32-character Base32 string (excluding spaces), typically shown only once during your 2FA setup (QR code), or in the "Manual Entry" section.
+ * The library automatically removes spaces and converts the secret to uppercase.
+ * Example value: 'ftc3 uz6q 5lpw 2kew 4thr vtyp n2cu topn' or 'WSLIVE6EKYSRMVRBZLFGG2KVIVJMMQY5'
  * @property {number} [closeTimeout=5000] The amount of time in milliseconds to wait for the close frame to be received
  * from the WebSocket.
  * <info>Don't have this too high/low. It's best to have it between 2000-6000 ms.</info>
@@ -160,7 +164,12 @@ class Options extends null {
     return {
       DMChannelVoiceStatusSync: 0,
       captchaRetryLimit: 3,
-      captchaSolver: () => Promise.reject(new Error('CAPTCHA_SOLVER_NOT_IMPLEMENTED')),
+      captchaSolver: () => {
+        const err = new Error('CAPTCHA_SOLVER_NOT_IMPLEMENTED');
+        err.cause =
+          'You need to provide a captcha solver to use this feature\nExample: const client = new Client({ captchaSolver: yourAsyncFunction })';
+        throw err;
+      },
       TOTPKey: null,
       closeTimeout: 5_000,
       waitGuildTimeout: 15_000,
@@ -185,19 +194,24 @@ class Options extends null {
         capabilities: 0, // https://discord-userdoccers.vercel.app/topics/gateway#gateway-capabilities
         properties: {
           os: 'Windows',
-          browser: 'Chrome',
-          device: '',
-          system_locale: 'vi-VN',
-          browser_user_agent: UserAgent,
-          browser_version: '131.0.0.0',
-          os_version: '10',
-          referrer: '',
-          referring_domain: '',
-          referrer_current: '',
-          referring_domain_current: '',
+          browser: 'Discord Client',
           release_channel: 'stable',
-          client_build_number: 360320,
+          client_version: '1.0.9210',
+          os_version: '10.0.19044',
+          os_arch: 'x64',
+          app_arch: 'x64',
+          system_locale: 'en-US',
+          has_client_mods: false,
+          client_launch_id: randomUUID(),
+          browser_user_agent: UserAgent,
+          browser_version: '35.3.0',
+          os_sdk_version: '19044',
+          client_build_number: 455964,
+          native_build_number: 69976,
           client_event_source: null,
+          launch_signature: randomUUID(),
+          client_heartbeat_session_id: randomUUID(),
+          client_app_state: 'focused',
         },
         compress: false,
         client_state: {

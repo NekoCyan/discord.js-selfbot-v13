@@ -226,6 +226,24 @@ export const enum MessageComponentTypes {
   ROLE_SELECT = 6,
   MENTIONABLE_SELECT = 7,
   CHANNEL_SELECT = 8,
+  SECTION = 9,
+  TEXT_DISPLAY = 10,
+  THUMBNAIL = 11,
+  MEDIA_GALLERY = 12,
+  FILE = 13,
+  SEPARATOR = 14,
+  CONTAINER = 17,
+}
+
+export const enum MessageComponentInteractables {
+  ACTION_ROW = 1,
+  BUTTON = 2,
+  STRING_SELECT = 3,
+  TEXT_INPUT = 4,
+  USER_SELECT = 5,
+  ROLE_SELECT = 6,
+  MENTIONABLE_SELECT = 7,
+  CHANNEL_SELECT = 8,
 }
 
 export const enum SelectMenuComponentTypes {
@@ -247,6 +265,75 @@ export const enum NSFWLevels {
   SAFE = 2,
   AGE_RESTRICTED = 3,
 }
+
+/**
+ * Background color of a nameplate.
+ * @see {@link https://docs.discord.food/resources/user#nameplate-color-palette}
+ */
+export enum NameplatePalette {
+  /**
+   * Value: none
+   * Name: None
+   */
+  None = 'none',
+  /**
+   * Value: crimson
+   * Name: Crimson
+   */
+  Crimson = 'crimson',
+  /**
+   * Value: berry
+   * Name: Berry
+   */
+  Berry = 'berry',
+  /**
+   * Value: sky
+   * Name: Sky
+   */
+  Sky = 'sky',
+  /**
+   * Value: teal
+   * Name: Teal
+   */
+  Teal = 'teal',
+  /**
+   * Value: forest
+   * Name: Forest
+   */
+  Forest = 'forest',
+  /**
+   * Value: bubble_gum
+   * Name: BubbleGum
+   */
+  BubbleGum = 'bubble_gum',
+  /**
+   * Value: violet
+   * Name: Violet
+   */
+  Violet = 'violet',
+  /**
+   * Value: cobalt
+   * Name: Cobalt
+   */
+  Cobalt = 'cobalt',
+  /**
+   * Value: clover
+   * Name: Clover
+   */
+  Clover = 'clover',
+  /**
+   * Value: lemon
+   * Name: Lemon
+   */
+  Lemon = 'lemon',
+  /**
+   * Value: white
+   * Name: White
+   */
+  White = 'white',
+}
+
+
 
 export const enum OverwriteTypes {
   role = 0,
@@ -324,4 +411,29 @@ export const enum RelationshipTypes {
   PENDING_INCOMING = 3,
   PENDING_OUTGOING = 4,
   IMPLICIT = 5,
+}
+
+export const enum SeparatorSpacingSizes {
+  SMALL = 1,
+  LARGE = 2,
+}
+
+export const enum ApplicationType {
+  /**
+   * A game integrating with Discord
+   */
+  GAME = 1,
+  /**
+   * A music service integrating with Discord
+   * @deprecated
+   */
+  MUSIC = 2,
+  /**
+   * A limited application used for ticketed event SKUs
+   */
+  TICKETED_EVENTS = 3,
+  /**
+   * A limited application used for creator monetization (e.g. role subscription) SKUs
+   */
+  CREATOR_MONETIZATION = 4,
 }

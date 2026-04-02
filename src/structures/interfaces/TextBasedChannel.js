@@ -10,7 +10,8 @@ const { setTimeout } = require('node:timers');
 const { s } = require('@sapphire/shapeshift');
 const Util = require('../../util/Util');
 const validateName = stringName =>
-  s.string
+  s
+    .string()
     .lengthGreaterThanOrEqual(1)
     .lengthLessThanOrEqual(32)
     .regex(/^[\p{Ll}\p{Lm}\p{Lo}\p{N}\p{sc=Devanagari}\p{sc=Thai}_-]+$/u)
@@ -101,9 +102,17 @@ class TextBasedChannel {
    */
 
   /**
+   * @typedef {Object} ForwardOptions
+   * @property {MessageResolvable} message The originating message
+   * @property {TextBasedChannelResolvable} [channel] The channel of the originating message
+   * @property {GuildResolvable} [guild] The guild of the originating message
+   */
+
+  /**
    * Options provided when sending or editing a message.
    * @typedef {BaseMessageOptions} MessageOptions
    * @property {ReplyOptions} [reply] The options for replying to a message
+   * @property {ForwardOptions} [forward] The options for forwarding a message
    * @property {StickerResolvable[]} [stickers=[]] Stickers to send in the message
    * @property {MessageFlags} [flags] Which flags to set for the message.
    * Only `SUPPRESS_EMBEDS`, `SUPPRESS_NOTIFICATIONS` and `IS_VOICE_MESSAGE` can be set.
@@ -264,9 +273,10 @@ class TextBasedChannel {
     );
     // Filter Bot
     botOrApplicationId = this.client.users.resolveId(botOrApplicationId);
-    const application = data.applications.find(
-      obj => obj.id == botOrApplicationId || obj.bot?.id == botOrApplicationId,
-    );
+    const application = data.applications.find(obj => obj.id == botOrApplicationId || obj.bot_id == botOrApplicationId);
+    if (!application) {
+      throw new Error('INVALID_APPLICATION_COMMAND', "Bot/Application doesn't exist");
+    }
     // Find Command with application
     const command = filterCommand.find(command => command.application_id == application.id);
     if (!command) {
@@ -377,13 +387,13 @@ class TextBasedChannel {
 
   /**
    * Sends a typing indicator in the channel.
-   * @returns {Promise<void>} Resolves upon the typing status being sent
+   * @returns {Promise<{ message_send_cooldown_ms: number, thread_create_cooldown_ms: number }|void>} Resolves upon the typing status being sent
    * @example
    * // Start typing in a channel
    * channel.sendTyping();
    */
-  async sendTyping() {
-    await this.client.api.channels(this.id).typing.post();
+  sendTyping() {
+    return this.client.api.channels(this.id).typing.post();
   }
 
   /**

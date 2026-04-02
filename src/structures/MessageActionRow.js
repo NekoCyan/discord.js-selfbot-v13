@@ -49,6 +49,8 @@ class MessageActionRow extends BaseMessageComponent {
      * @type {MessageActionRowComponent[]}
      */
     this.components = data.components?.map(c => BaseMessageComponent.create(c, client)) ?? [];
+
+    super.setup(data);
   }
 
   /**

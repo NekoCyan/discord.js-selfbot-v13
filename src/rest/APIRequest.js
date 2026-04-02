@@ -2,14 +2,9 @@
 
 const Buffer = require('node:buffer').Buffer;
 const { setTimeout } = require('node:timers');
-const makeFetchCookie = require('fetch-cookie');
-const { CookieJar } = require('tough-cookie');
-const { fetch: fetchOriginal, FormData, buildConnector, Client, ProxyAgent } = require('undici');
+const { FormData, buildConnector, Client, ProxyAgent } = require('undici');
 const { ciphers } = require('../util/Constants');
 const Util = require('../util/Util');
-
-const cookieJar = new CookieJar();
-const fetch = makeFetchCookie(fetchOriginal, cookieJar);
 
 let agent = null;
 
@@ -60,23 +55,23 @@ class APIRequest {
     let headers = {
       accept: '*/*',
       'accept-language': 'en-US',
-      'sec-ch-ua': '"Chromium";v="131", "Not_A Brand";v="24"',
+      priority: 'u=1, i',
+      referer: 'https://discord.com/channels/@me',
+      'sec-ch-ua': '"Not:A-Brand";v="24", "Chromium";v="134"',
       'sec-ch-ua-mobile': '?0',
       'sec-ch-ua-platform': '"Windows"',
       'sec-fetch-dest': 'empty',
       'sec-fetch-mode': 'cors',
       'sec-fetch-site': 'same-origin',
-      'x-debug-options': 'bugReporterEnabled',
       'x-discord-locale': 'en-US',
       'x-discord-timezone': Intl.DateTimeFormat().resolvedOptions().timeZone,
       'x-super-properties': `${Buffer.from(JSON.stringify(this.client.options.ws.properties), 'ascii').toString(
         'base64',
       )}`,
-      referer: 'https://discord.com/channels/@me',
       origin: 'https://discord.com',
+      'x-debug-options': 'bugReporterEnabled',
       ...this.client.options.http.headers,
       'User-Agent': this.fullUserAgent,
-      priority: 'u=1, i',
     };
 
     if (this.options.auth !== false) headers.Authorization = this.rest.getAuth();
@@ -112,7 +107,15 @@ class APIRequest {
     if (this.options.files?.length) {
       body = new FormData();
       for (const [index, file] of this.options.files.entries()) {
-        if (file?.file) body.append(file.key ?? `files[${index}]`, file.file, file.name);
+        // Why undici#FormData doesn't support file stream?
+        // Hacky way to support file stream
+        if (file?.file) {
+          body.set(file.key ?? `files[${index}]`, {
+            [Symbol.toStringTag]: 'File',
+            name: file.name,
+            stream: () => file.file,
+          });
+        }
       }
       if (typeof this.options.data !== 'undefined') {
         if (this.options.dontUsePayloadJSON) {
@@ -121,7 +124,6 @@ class APIRequest {
           body.append('payload_json', JSON.stringify(this.options.data));
         }
       }
-      headers = Object.assign(headers, body.getHeaders());
       // eslint-disable-next-line eqeqeq
     } else if (this.options.data != null) {
       if (this.options.usePayloadJSON) {
@@ -135,15 +137,17 @@ class APIRequest {
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.client.options.restRequestTimeout).unref();
-    return fetch(url, {
-      method: this.method.toUpperCase(), // Undici doesn't normalize "patch" into "PATCH" (which surprisingly follows the spec).
-      headers,
-      body,
-      signal: controller.signal,
-      redirect: 'follow',
-      dispatcher: agent,
-      credentials: 'include',
-    }).finally(() => clearTimeout(timeout));
+    return this.rest
+      .fetch(url, {
+        method: this.method.toUpperCase(), // Undici doesn't normalize "patch" into "PATCH" (which surprisingly follows the spec).
+        headers,
+        body,
+        signal: controller.signal,
+        redirect: 'follow',
+        dispatcher: agent,
+        credentials: 'include',
+      })
+      .finally(() => clearTimeout(timeout));
   }
 }
 

@@ -1,3 +1,10 @@
+> [!IMPORTANT]
+> ## Project Archival
+> 
+> **This project is no longer actively maintained and this repository has been archived.**
+>
+> You can read the full announcement [here](https://github.com/aiko-chan-ai/discord.js-selfbot-v13/discussions/1743)
+
 <div align="center">
   <br />
   <p>
@@ -5,16 +12,13 @@
   </p>
 </div>
 
-> [!TIP]
-> **Based on the results of the poll https://github.com/aiko-chan-ai/discord.js-selfbot-v13/discussions/1292, I will continue to update on NPM.**
-
 > [!CAUTION]
 > **The use of this module under a different name on NPM (or another source besides this Github) is not associated with this library.**
 > **When using these libraries, you accept the risk of exposing your Discord Token.**
 
 ## About
 
-<strong>Welcome to `discord.js-selfbot-v13@v3.5`, based on `discord.js@13.17` and backport `discord.js@14.17.3`</strong>
+<strong>Welcome to `discord.js-selfbot-v13@v3.7`, based on `discord.js@13.17` and backport `discord.js@14.21.0`</strong>
 
 - discord.js-selfbot-v13 is a [Node.js](https://nodejs.org) module that allows user accounts to interact with the Discord API v9.
 
@@ -33,11 +37,6 @@
 > [!CAUTION]
 > **Using this on a user account is prohibited by the [Discord TOS](https://discord.com/terms) and can lead to the account block.**
 
-## Project Status
-
-> [!IMPORTANT]
-> `discord.js-selfbot-v13` is currently in maintenance mode. New features are not actively being added but existing features and new versions of discord are supported as possible. There are some major architectural changes which need to be added to improve the stability and security of the project. I don't have as much spare time as I did when I started this project, so there is not currently any plan for these improvements.
-
 ### <strong>[Document Website](https://discordjs-self-v13.netlify.app/)</strong>
 
 ### <strong>[Example Code](https://github.com/aiko-chan-ai/discord.js-selfbot-v13/tree/main/examples)</strong>
@@ -55,7 +54,7 @@
 ## Installation
 
 > [!NOTE]
-> **Node.js 18.17.0 or newer is required**
+> **Node.js 20.18.0 or newer is required**
 
 ```sh-session
 npm install discord.js-selfbot-v13@latest
@@ -76,26 +75,28 @@ client.login('token');
 
 ## Get Token ?
 
+- Based: [findByProps](https://discord.com/channels/603970300668805120/1085682686607249478/1085682686607249478)
+
 <strong>Run code (Discord Console - [Ctrl + Shift + I])</strong>
 
 ```js
 window.webpackChunkdiscord_app.push([
-  [Math.random()],
-  {},
-  req => {
-    if (!req.c) return;
-    for (const m of Object.keys(req.c)
-      .map(x => req.c[x].exports)
-      .filter(x => x)) {
-      if (m.default && m.default.getToken !== undefined) {
-        return copy(m.default.getToken());
-      }
-      if (m.getToken !== undefined) {
-        return copy(m.getToken());
-      }
-    }
-  },
+	[Symbol()],
+	{},
+	req => {
+		if (!req.c) return;
+		for (let m of Object.values(req.c)) {
+			try {
+				if (!m.exports || m.exports === window) continue;
+				if (m.exports?.getToken) return copy(m.exports.getToken());
+				for (let ex in m.exports) {
+					if (m.exports?.[ex]?.getToken && m.exports[ex][Symbol.toStringTag] !== 'IntlMessagesProxy') return copy(m.exports[ex].getToken());
+				}
+			} catch {}
+		}
+	},
 ]);
+
 window.webpackChunkdiscord_app.pop();
 console.log('%cWorked!', 'font-size: 50px');
 console.log(`%cYou now have your token in the clipboard!`, 'font-size: 16px');

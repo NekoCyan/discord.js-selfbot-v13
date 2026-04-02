@@ -5,6 +5,7 @@ const process = require('node:process');
 const { setInterval } = require('node:timers');
 const { setTimeout } = require('node:timers');
 const { Collection } = require('@discordjs/collection');
+const { authenticator } = require('otplib');
 const BaseClient = require('./BaseClient');
 const ActionsManager = require('./actions/ActionsManager');
 const ClientVoiceManager = require('./voice/ClientVoiceManager');
@@ -17,6 +18,7 @@ const ClientUserSettingManager = require('../managers/ClientUserSettingManager')
 const GuildManager = require('../managers/GuildManager');
 const PresenceManager = require('../managers/PresenceManager');
 const RelationshipManager = require('../managers/RelationshipManager');
+const SessionManager = require('../managers/SessionManager');
 const UserManager = require('../managers/UserManager');
 const UserNoteManager = require('../managers/UserNoteManager');
 const VoiceStateManager = require('../managers/VoiceStateManager');
@@ -30,12 +32,12 @@ const StickerPack = require('../structures/StickerPack');
 const VoiceRegion = require('../structures/VoiceRegion');
 const Webhook = require('../structures/Webhook');
 const Widget = require('../structures/Widget');
+const Application = require('../structures/interfaces/Application');
 const { Events, Status } = require('../util/Constants');
 const DataResolver = require('../util/DataResolver');
 const Intents = require('../util/Intents');
 const DiscordAuthWebsocket = require('../util/RemoteAuth');
 const Sweepers = require('../util/Sweepers');
-const TOTP = require('../util/Totp');
 
 /**
  * The main hub for interacting with the Discord API, and the starting point for any bot.
@@ -157,6 +159,12 @@ class Client extends BaseClient {
     this.billing = new BillingManager(this);
 
     /**
+     * All of the sessions of the client
+     * @type {SessionManager}
+     */
+    this.sessions = new SessionManager(this);
+
+    /**
      * All of the settings {@link Object}
      * @type {ClientUserSettingManager}
      */
@@ -187,6 +195,18 @@ class Client extends BaseClient {
      * @type {?Date}
      */
     this.readyAt = null;
+
+    /**
+     * The authenticator used for TOTP
+     * @type {Object}
+     */
+    this.authenticator = authenticator;
+
+    this.authenticator.options = {
+      step: 30,
+      digits: 6,
+      algorithm: 'sha1',
+    };
 
     if (this.options.messageSweepInterval > 0) {
       process.emitWarning(
@@ -299,7 +319,7 @@ class Client extends BaseClient {
       return this.login(initial.token);
     } else if ('ticket' in initial) {
       if (!this.options.TOTPKey) throw new Error('TOTPKEY_MISSING');
-      const { otp } = await TOTP.generate(this.options.TOTPKey);
+      const otp = this.authenticator.generate(this.options.TOTPKey);
       const totp = await this.api.auth.mfa.totp.post({
         auth: false,
         versioned: true,
@@ -373,7 +393,7 @@ class Client extends BaseClient {
   async fetchInvite(invite, options) {
     const code = DataResolver.resolveInviteCode(invite);
     const data = await this.api.invites(code).get({
-      query: { with_counts: true, with_expiration: true, guild_scheduled_event_id: options?.guildScheduledEventId },
+      query: { with_counts: true, guild_scheduled_event_id: options?.guildScheduledEventId },
     });
     return new Invite(this, data);
   }
@@ -779,19 +799,53 @@ class Client extends BaseClient {
   }
 
   /**
-   * Deauthorize an application.
-   * @param {Snowflake} applicationId Discord Application id
-   * @returns {Promise<void>}
+   * Deauthorizes an application or token.
+   * @param {Snowflake} id - The ID of the Discord Application or Token.
+   * @param {'application' | 'token'} [type='application'] - The type of the ID provided. Defaults to 'application'.
+   * @returns {Promise<void>} A promise that resolves when the deauthorization is complete.
    */
-  deauthorize(applicationId) {
-    return this.api.oauth2.tokens
-      .get()
-      .then(data => data.find(o => o.application.id == applicationId))
-      .then(o => this.api.oauth2.tokens(o.id).delete());
+  deauthorize(id, type = 'application') {
+    if (type === 'application') {
+      return this.api.oauth2.tokens
+        .get()
+        .then(data => data.find(o => o.application.id == id))
+        .then(o => this.api.oauth2.tokens(o.id).delete());
+    } else {
+      return this.api.oauth2.tokens(id).delete();
+    }
   }
 
   /**
-   * Calls {@link https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/eval} on a script
+   * @typedef {Object} AuthorizedApplicationData
+   * @property {Application} application - The application object.
+   * @property {Snowflake} authorizedApplicationId - The ID of the OAuth2 token.
+   * @property {string[]} scopes - The scopes that were granted to this token.
+   * @property {function(): Promise<void>} deauthorize - Function to revoke this token.
+   */
+
+  /**
+   * Retrieves the list of authorized applications (OAuth2 tokens).
+   * @returns {Promise<Collection<Snowflake, AuthorizedApplicationData>>}
+   */
+  authorizedApplications() {
+    return this.api.oauth2.tokens.get().then(data => {
+      const results = new Collection();
+      for (const o of data) {
+        const application = new Application(this, o.application);
+        const data = {
+          application,
+          authorizedApplicationId: o.id,
+          scopes: o.scopes,
+          deauthorize: () => this.deauthorize(o.id, 'token'),
+        };
+        results.set(o.application.id, data);
+      }
+      return results;
+    });
+  }
+
+  /**
+   * Calls {@link https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/eval} on a script
    * with the client as `this`.
    * @param {string} script Script to eval
    * @returns {*}
@@ -854,6 +908,10 @@ class Client extends BaseClient {
       !(typeof options.rejectOnRateLimit === 'function' || Array.isArray(options.rejectOnRateLimit))
     ) {
       throw new TypeError('CLIENT_INVALID_OPTION', 'rejectOnRateLimit', 'an array or a function');
+    }
+    if (typeof options.TOTPKey === 'string') {
+      // Convert to base32 if not already
+      options.TOTPKey = options.TOTPKey.replace(/ +/g, '').toUpperCase();
     }
     // Hardcode
     this.options.shardCount = 1;

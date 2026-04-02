@@ -244,10 +244,11 @@ class GuildChannel extends Channel {
       return new Permissions(Permissions.ALL).freeze();
     }
 
+    const basePermissions = new Permissions([role.permissions, role.guild.roles.everyone.permissions]);
     const everyoneOverwrites = this.permissionOverwrites.cache.get(this.guild.id);
     const roleOverwrites = this.permissionOverwrites.cache.get(role.id);
 
-    return role.permissions
+    return basePermissions
       .remove(everyoneOverwrites?.deny ?? Permissions.defaultBit)
       .add(everyoneOverwrites?.allow ?? Permissions.defaultBit)
       .remove(roleOverwrites?.deny ?? Permissions.defaultBit)
@@ -259,8 +260,8 @@ class GuildChannel extends Channel {
    * Locks in the permission overwrites from the parent channel.
    * @returns {Promise<GuildChannel>}
    */
-  lockPermissions() {
-    if (!this.parent) return Promise.reject(new Error('GUILD_CHANNEL_ORPHAN'));
+  async lockPermissions() {
+    if (!this.parent) throw new Error('GUILD_CHANNEL_ORPHAN');
     const permissionOverwrites = this.parent.permissionOverwrites.cache.map(overwrite => overwrite.toJSON());
     return this.edit({ permissionOverwrites });
   }

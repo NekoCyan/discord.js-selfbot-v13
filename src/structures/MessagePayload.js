@@ -3,11 +3,12 @@
 const { Buffer } = require('node:buffer');
 const BaseMessageComponent = require('./BaseMessageComponent');
 const MessageEmbed = require('./MessageEmbed');
-const { RangeError } = require('../errors');
+const { RangeError, Error: DjsError } = require('../errors');
 const ActivityFlags = require('../util/ActivityFlags');
 const { PollLayoutTypes, MessageReferenceTypes } = require('../util/Constants');
 const DataResolver = require('../util/DataResolver');
 const MessageFlags = require('../util/MessageFlags');
+const SnowflakeUtil = require('../util/SnowflakeUtil');
 const Util = require('../util/Util');
 
 /**
@@ -131,7 +132,7 @@ class MessagePayload {
     const content = this.makeContent();
     const tts = Boolean(this.options.tts);
 
-    let nonce;
+    let nonce = SnowflakeUtil.generate();
     if (typeof this.options.nonce !== 'undefined') {
       nonce = this.options.nonce;
       // eslint-disable-next-line max-len
@@ -154,12 +155,7 @@ class MessagePayload {
     }
 
     let flags;
-    if (
-      // eslint-disable-next-line eqeqeq
-      this.options.flags != null ||
-      (this.isMessage && typeof this.options.reply === 'undefined') ||
-      this.isMessageManager
-    ) {
+    if (this.options.flags != null) {
       flags = new MessageFlags(this.options.flags).bitfield;
     }
 
@@ -190,9 +186,21 @@ class MessagePayload {
         };
       }
     }
+
     if (typeof this.options.forward === 'object') {
-      message_reference = this.options.forward;
-      message_reference.type = MessageReferenceTypes.FORWARD;
+      const reference = this.options.forward.message;
+      const channel_id = reference.channelId ?? this.target.client.channels.resolveId(this.options.forward.channel);
+      const guild_id = reference.guildId ?? this.target.client.guilds.resolveId(this.options.forward.guild);
+      const message_id = this.target.messages.resolveId(reference);
+      if (message_id) {
+        if (!channel_id) throw new DjsError('INVALID_TYPE', 'channelId', 'TextBasedChannelResolvable');
+        message_reference = {
+          type: MessageReferenceTypes.FORWARD,
+          message_id,
+          channel_id,
+          guild_id: guild_id ?? undefined,
+        };
+      }
     }
 
     const attachments = this.options.files?.map((file, index) => ({
@@ -250,7 +258,9 @@ class MessagePayload {
       username,
       avatar_url: avatarURL,
       allowed_mentions:
-        typeof content === 'undefined' && typeof message_reference === 'undefined' ? undefined : allowedMentions,
+        this.isMessage && message_reference === undefined && this.target?.author?.id !== this.target?.client?.user?.id
+          ? undefined
+          : allowedMentions,
       flags,
       message_reference,
       attachments: this.options.attachments,
