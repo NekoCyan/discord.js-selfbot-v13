@@ -28,8 +28,12 @@ import {
   APIApplicationCommandPermission,
   APIAuditLogChange,
   APIButtonComponent,
+  APIChannel,
+  APIChatInputApplicationCommandInteractionData,
+  APIContextMenuInteractionData,
   APIEmbed,
   APIEmoji,
+  APIGuildMember,
   APIInteractionDataResolvedChannel,
   APIInteractionDataResolvedGuildMember,
   APIInteractionGuildMember,
@@ -41,39 +45,36 @@ import {
   APIPartialChannel,
   APIPartialEmoji,
   APIPartialGuild,
+  APIPoll,
+  APIPollAnswer,
   APIRole,
   APISelectMenuComponent,
   APITemplateSerializedSourceGuild,
   APIUser,
+  GatewayVoiceChannelEffectSendDispatchData,
   GatewayVoiceServerUpdateDispatchData,
   GatewayVoiceStateUpdateDispatchData,
+  GuildScheduledEventRecurrenceRuleFrequency,
+  GuildScheduledEventRecurrenceRuleMonth,
+  GuildScheduledEventRecurrenceRuleWeekday,
+  LocaleString,
+  LocalizationMap,
   MessageActivityType,
+  ReactionType,
   RESTPostAPIApplicationCommandsJSONBody,
   Snowflake,
-  LocalizationMap,
-  LocaleString,
-  APIGuildMember,
-  APIChannel,
   TeamMemberRole,
-  APIPoll,
-  APIPollAnswer,
-  GuildScheduledEventRecurrenceRuleWeekday,
-  GuildScheduledEventRecurrenceRuleMonth,
-  GuildScheduledEventRecurrenceRuleFrequency,
-  APIChatInputApplicationCommandInteractionData,
-  APIContextMenuInteractionData,
-  ReactionType,
   VoiceChannelEffectSendAnimationType,
-  GatewayVoiceChannelEffectSendDispatchData,
 } from 'discord-api-types/v10';
 import { ChildProcess, ChildProcessWithoutNullStreams } from 'node:child_process';
+import { Socket } from 'node:dgram';
 import { EventEmitter } from 'node:events';
 import { AgentOptions } from 'node:https';
-import { Response, ProxyAgent } from 'undici';
-import { Readable, Writable, Stream } from 'node:stream';
+import { Readable, Stream, Writable } from 'node:stream';
 import { MessagePort, Worker } from 'node:worker_threads';
 import { authenticator } from 'otplib';
 import { CookieJar } from 'tough-cookie';
+import { ProxyAgent, Response } from 'undici';
 import { RtpPacket } from 'werift-rtp';
 import * as WebSocket from 'ws';
 import {
@@ -81,6 +82,8 @@ import {
   ApplicationCommandOptionTypes,
   ApplicationCommandPermissionTypes,
   ApplicationCommandTypes,
+  ApplicationRoleConnectionMetadataTypes,
+  ApplicationType,
   AutoModerationActionTypes,
   AutoModerationRuleEventTypes,
   AutoModerationRuleKeywordPresetTypes,
@@ -88,44 +91,51 @@ import {
   ChannelTypes,
   DefaultMessageNotificationLevels,
   ExplicitContentFilterLevels,
+  ForumLayoutTypes,
+  GuildScheduledEventEntityTypes,
+  GuildScheduledEventPrivacyLevels,
+  GuildScheduledEventStatuses,
   InteractionResponseTypes,
   InteractionTypes,
   InviteTargetTypes,
+  InviteTypes,
   MembershipStates,
   MessageButtonStyles,
-  MessageComponentTypes,
   MessageComponentInteractables,
+  MessageComponentTypes,
+  MessageReferenceTypes,
   MessageTypes,
   MFALevels,
+  NameplatePalette,
   NSFWLevels,
   OverwriteTypes,
+  PollLayoutTypes,
   PremiumTiers,
   PrivacyLevels,
+  ReactionTypes,
+  RelationshipTypes,
+  SelectMenuComponentTypes,
+  SeparatorSpacingSizes,
+  SortOrderTypes,
   StickerFormatTypes,
   StickerTypes,
   TextInputStyles,
   VerificationLevels,
-  WebhookTypes,
-  GuildScheduledEventEntityTypes,
-  GuildScheduledEventStatuses,
-  GuildScheduledEventPrivacyLevels,
   VideoQualityModes,
-  SortOrderTypes,
-  ForumLayoutTypes,
-  ApplicationRoleConnectionMetadataTypes,
-  RelationshipTypes,
-  SelectMenuComponentTypes,
-  InviteTypes,
-  PollLayoutTypes,
-  ReactionTypes,
-  MessageReferenceTypes,
-  SeparatorSpacingSizes,
-  ApplicationType,
-  NameplatePalette,
+  WebhookTypes,
 } from './enums';
 import {
   APIApplicationRoleConnectionMetadata,
   APIAutoModerationRule,
+  APIContainerComponent,
+  APIFileComponent,
+  APIMediaGalleryComponent,
+  APIMediaGalleryItem,
+  APISectionComponent,
+  APISeparatorComponent,
+  APITextDisplayComponent,
+  APIThumbnailComponent,
+  APIUnfurledMediaItem,
   GatewayAutoModerationActionExecutionDispatchData,
   RawActivityData,
   RawAnonymousGuildData,
@@ -184,17 +194,7 @@ import {
   RawWelcomeScreenData,
   RawWidgetData,
   RawWidgetMemberData,
-  APIUnfurledMediaItem,
-  APIContainerComponent,
-  APIFileComponent,
-  APISectionComponent,
-  APISeparatorComponent,
-  APIThumbnailComponent,
-  APITextDisplayComponent,
-  APIMediaGalleryComponent,
-  APIMediaGalleryItem,
 } from './rawDataTypes';
-import { Socket } from 'node:dgram';
 
 //#region Classes
 
@@ -7631,7 +7631,9 @@ export type PermissionString =
   | 'USE_CLYDE_AI'
   | 'SET_VOICE_CHANNEL_STATUS'
   | 'SEND_POLLS'
-  | 'USE_EXTERNAL_APPS';
+  | 'USE_EXTERNAL_APPS'
+  | 'PIN_MESSAGES'
+  | 'BYPASS_SLOWMODE';
 
 export type RecursiveArray<T> = ReadonlyArray<T | RecursiveArray<T>>;
 
