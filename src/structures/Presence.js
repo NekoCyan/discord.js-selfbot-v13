@@ -420,7 +420,7 @@ class Activity {
   }
 
   toJSON(...props) {
-    return Util.clearNullOrUndefinedObject({
+    return Util.cleanNullOrUndefinedOrEmptyArrayFromObject({
       ...Util.flatten(this, ...props),
       type: typeof this.type === 'number' ? this.type : ActivityTypes[this.type],
     });

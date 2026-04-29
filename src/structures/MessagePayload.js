@@ -154,7 +154,7 @@ class MessagePayload {
       if (this.options.appliedTags) appliedTags = this.options.appliedTags;
     }
 
-    let flags;
+    let flags = 0;
     if (this.options.flags != null) {
       flags = new MessageFlags(this.options.flags).bitfield;
     }
@@ -248,7 +248,7 @@ class MessagePayload {
       };
     }
 
-    this.data = {
+    this.data = Util.cleanUndefinedFromObject({
       activity,
       content,
       tts,
@@ -268,7 +268,8 @@ class MessagePayload {
       thread_name: threadName,
       applied_tags: appliedTags,
       poll,
-    };
+      mobile_network_type: 'unknown',
+    });
     return this;
   }
 

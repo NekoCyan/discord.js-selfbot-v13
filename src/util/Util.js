@@ -963,7 +963,12 @@ class Util extends null {
     });
   }
 
-  static clearNullOrUndefinedObject(object) {
+  /**
+   * Cleans an object of any null, undefined or empty array values, recursively. If the resulting object is empty, returns undefined.
+   * @param {Object} object The object to clear
+   * @returns {Object | undefined} The cleaned object, or undefined if input object is empty after cleaning
+   */
+  static cleanNullOrUndefinedOrEmptyArrayFromObject(object) {
     const data = {};
     const keys = Object.keys(object);
 
@@ -972,10 +977,34 @@ class Util extends null {
       if (value === undefined || value === null || (Array.isArray(value) && value.length === 0)) {
         continue;
       } else if (!Array.isArray(value) && typeof value === 'object') {
-        const cleanedValue = Util.clearNullOrUndefinedObject(value);
+        const cleanedValue = Util.cleanNullOrUndefinedOrEmptyArrayFromObject(value);
         if (cleanedValue !== undefined) {
           data[key] = cleanedValue;
         }
+      } else {
+        data[key] = value;
+      }
+    }
+
+    return Object.keys(data).length > 0 ? data : undefined;
+  }
+
+  /**
+   * Cleans an object of any undefined values, recursively. If the resulting object is empty, returns undefined.
+   * @param {Object} object The object to clear
+   * @returns {Object | undefined} The cleaned object, or undefined if input object is empty after cleaning
+   */
+  static cleanUndefinedFromObject(object) {
+    const data = {};
+    const keys = Object.keys(object);
+
+    for (const key of keys) {
+      const value = object[key];
+      if (value === undefined) {
+        continue;
+      }
+      if (value !== null && !Array.isArray(value) && typeof value === 'object') {
+        data[key] = Util.cleanUndefinedFromObject(value);
       } else {
         data[key] = value;
       }
