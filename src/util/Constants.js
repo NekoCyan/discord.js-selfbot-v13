@@ -1730,7 +1730,7 @@ exports.GuildScheduledEventPrivacyLevels = createEnum([null, null, 'GUILD_ONLY']
 exports.PremiumTiers = createEnum(['NONE', 'TIER_1', 'TIER_2', 'TIER_3']);
 
 /**
- * The age verification status of an client user:
+ * The age verification status of the client user:
  * * UNVERIFIED
  * * VERIFIED_TEEN
  * * VERIFIED_ADULT
@@ -1903,7 +1903,7 @@ function createEnum(keys) {
  * @property {Object} Package The package.json of the library.
  * @property {Object<PartialType, PartialType>} PartialTypes The type of Structure allowed to be a partial.
  * @property {Object<PremiumTier, number>} PremiumTiers The premium tier (Server Boost level) of a guild.
- * @property {Object<AgeVerificationStatuses, number>} AgeVerificationStatuses The age verification status of a user.
+ * @property {Object<AgeVerificationStatus, number>} AgeVerificationStatuses The age verification status of the client user.
  * @property {Object<PrivacyLevel, number>} PrivacyLevels Privacy level of a {@link StageInstance} object.
  * @property {ShardEvents} ShardEvents The type of events emitted by a Shard.
  * @property {Status} Status The available statuses of the client.
