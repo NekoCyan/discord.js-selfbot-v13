@@ -79,6 +79,7 @@ import { RtpPacket } from 'werift-rtp';
 import * as WebSocket from 'ws';
 import {
   ActivityTypes,
+  AgeVerificationStatuses,
   ApplicationCommandOptionTypes,
   ApplicationCommandPermissionTypes,
   ApplicationCommandTypes,
@@ -967,6 +968,7 @@ export class ClientUser extends User {
   public bio?: string;
   public pronouns?: string;
   public premiumType: number;
+  public ageVerificationStatus: number;
   public setBanner(banner: BufferResolvable | Base64Resolvable | null): Promise<this>;
   public setHypeSquad(
     hypesquad: 0 | 1 | 2 | 3 | 'LEAVE' | 'HOUSE_BRAVERY' | 'HOUSE_BRILLIANCE' | 'HOUSE_BALANCE',
@@ -4272,6 +4274,7 @@ export const Constants: {
     [K in PartialTypes]: K;
   };
   PremiumTiers: EnumHolder<typeof PremiumTiers>;
+  AgeVerificationStatuses: EnumHolder<typeof AgeVerificationStatuses>;
   PrivacyLevels: EnumHolder<typeof PrivacyLevels>;
   ShardEvents: ConstantsShardEvents;
   Status: ConstantsStatus;

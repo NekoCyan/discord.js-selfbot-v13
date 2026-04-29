@@ -345,6 +345,13 @@ export const enum PremiumTiers {
   TIER_3 = 3,
 }
 
+export const enum AgeVerificationStatuses {
+  UNVERIFIED = 1,
+  VERIFIED_TEEN = 2,
+  VERIFIED_ADULT = 3,
+  INFERRED_ADULT = 4,
+}
+
 export const enum PrivacyLevels {
   PUBLIC = 1,
   GUILD_ONLY = 2,

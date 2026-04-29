@@ -114,6 +114,15 @@ class ClientUser extends User {
        */
       this.premiumType = data.premium_type;
     }
+
+    if ('age_verification_status' in data) {
+      /**
+       * Age verification status of the client user.
+       * @type {number}
+       * @see {@link https://docs.discord.food/resources/user#age-verification-status}
+       */
+      this.ageVerificationStatus = data.age_verification_status;
+    }
   }
 
   /**
