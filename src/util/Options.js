@@ -196,7 +196,11 @@ class Options extends null {
           os: 'Windows',
           browser: 'Discord Client',
           release_channel: 'stable',
-          client_version: '1.0.9234',
+          client_version:
+            UserAgent.split(' ')
+              .find(x => x.startsWith('discord/'))
+              ?.split('/')[1] || // Extract the Discord version from the UserAgent string
+            '1.0.9243',
           os_version: '10.0.19045',
           os_arch: 'x64',
           app_arch: 'x64',
@@ -204,10 +208,14 @@ class Options extends null {
           has_client_mods: false,
           client_launch_id: randomUUID(),
           browser_user_agent: UserAgent,
-          browser_version: '37.6.0',
+          browser_version:
+            UserAgent.split(' ')
+              .find(x => x.startsWith('Electron/'))
+              ?.split('/')[1] || // Extract the Electron version from the UserAgent string
+            '37.6.0',
           os_sdk_version: '19045',
-          client_build_number: 536166,
-          native_build_number: 80790,
+          client_build_number: 570702,
+          native_build_number: 84934,
           client_event_source: null,
           launch_signature: randomUUID(),
           client_heartbeat_session_id: randomUUID(),
