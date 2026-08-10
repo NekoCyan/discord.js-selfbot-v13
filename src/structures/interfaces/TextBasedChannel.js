@@ -211,7 +211,8 @@ class TextBasedChannel {
     });
     const attachmentsData = await Promise.all(requestPromises);
     attachmentsData.sort((a, b) => parseInt(a.id) - parseInt(b.id));
-    data.attachments = attachmentsData;
+    if (attachmentsData.length > 0) data.attachments = attachmentsData;
+
     // Empty Files
     const d = await this.client.api.channels[this.id].messages.post({ data });
 
