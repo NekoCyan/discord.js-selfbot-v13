@@ -865,7 +865,7 @@ export class Client<Ready extends boolean = boolean> extends BaseClient {
   public readonly sessionId: If<Ready, string, undefined>;
   public destroy(): void;
   public fetchGuildPreview(guild: GuildResolvable): Promise<GuildPreview>;
-  public fetchInvite(invite: InviteResolvable, options?: ClientFetchInviteOptions): Promise<Invite>;
+  public fetchInvite(invite: InviteResolvable): Promise<Invite>;
   public fetchGuildTemplate(template: GuildTemplateResolvable): Promise<GuildTemplate>;
   public fetchVoiceRegions(): Promise<Collection<string, VoiceRegion>>;
   public fetchSticker(id: Snowflake): Promise<Sticker>;
@@ -5996,10 +5996,6 @@ export interface ClientEvents extends BaseClientEvents {
   callDelete: [call: CallState];
   messagePollVoteAdd: [pollAnswer: PollAnswer, userId: Snowflake];
   messagePollVoteRemove: [pollAnswer: PollAnswer, userId: Snowflake];
-}
-
-export interface ClientFetchInviteOptions {
-  guildScheduledEventId?: Snowflake;
 }
 
 export type CaptchaSolver = (captcha: Captcha, UserAgent: string) => Promise<string>;

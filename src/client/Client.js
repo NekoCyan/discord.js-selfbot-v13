@@ -374,26 +374,18 @@ class Client extends BaseClient {
   }
 
   /**
-   * Options used when fetching an invite from Discord.
-   * @typedef {Object} ClientFetchInviteOptions
-   * @property {Snowflake} [guildScheduledEventId] The id of the guild scheduled event to include with
-   * the invite
-   */
-
-  /**
    * Obtains an invite from Discord.
    * @param {InviteResolvable} invite Invite code or URL
-   * @param {ClientFetchInviteOptions} [options] Options for fetching the invite
    * @returns {Promise<Invite>}
    * @example
    * client.fetchInvite('https://discord.gg/djs')
    *   .then(invite => console.log(`Obtained invite with code: ${invite.code}`))
    *   .catch(console.error);
    */
-  async fetchInvite(invite, options) {
+  async fetchInvite(invite) {
     const code = DataResolver.resolveInviteCode(invite);
     const data = await this.api.invites(code).get({
-      query: { with_counts: true, guild_scheduled_event_id: options?.guildScheduledEventId },
+      query: { inputValue: code, with_counts: true, with_expiration: true, with_permissions: true },
     });
     return new Invite(this, data);
   }
