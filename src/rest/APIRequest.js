@@ -52,12 +52,15 @@ class APIRequest {
         : `${this.client.options.http.api}/v${this.client.options.http.version}`;
     const url = API + this.path;
 
+    const parsedUA = Util.parseUserAgent(this.fullUserAgent);
+    const chromeReleaseVersion = parsedUA.chromeVersion.split('.')[0];
+
     let headers = {
       accept: '*/*',
       'accept-language': 'en-US',
       priority: 'u=1, i',
       referer: 'https://discord.com/channels/@me',
-      'sec-ch-ua': '"Not:A-Brand";v="24", "Chromium";v="134"',
+      'sec-ch-ua': `"Not:A-Brand";v="24", "Chromium";v="${chromeReleaseVersion}"`,
       'sec-ch-ua-mobile': '?0',
       'sec-ch-ua-platform': '"Windows"',
       'sec-fetch-dest': 'empty',

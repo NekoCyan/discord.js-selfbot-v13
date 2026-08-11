@@ -1069,6 +1069,27 @@ a=extmap:14 urn:ietf:params:rtp-hdrext:toffset
 `;
     return sdpData;
   }
+
+  /**
+   * Parses a user agent string into an object containing the OS, architecture, and versions of WebKit, Discord, Chrome, Electron, and Safari.
+   * @param {string} ua The user agent string to parse
+   * @returns {Object} An object containing the parsed user agent information
+   */
+  static parseUserAgent(ua) {
+    const get = re => (ua.match(re) || [])[1];
+    const platformBlock = get(/\((.*?)\)/) || '';
+    const parts = platformBlock.split(';').map(s => s.trim());
+
+    return {
+      os: parts[0],
+      arch: parts[parts.length - 1],
+      webkit: get(/AppleWebKit\/([\d.]+)/),
+      discordVersion: get(/discord\/([\d.]+)/),
+      chromeVersion: get(/Chrome\/([\d.]+)/),
+      electronVersion: get(/Electron\/([\d.]+)/),
+      safariVersion: get(/Safari\/([\d.]+)/),
+    };
+  }
 }
 
 module.exports = Util;

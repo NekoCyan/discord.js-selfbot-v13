@@ -3,6 +3,7 @@
 const { randomUUID } = require('node:crypto');
 const { UserAgent } = require('./Constants');
 const Intents = require('./Intents');
+const { parseUserAgent } = require('./Util');
 
 /**
  * Rate limit data
@@ -161,6 +162,8 @@ class Options extends null {
    * @returns {ClientOptions}
    */
   static createDefault() {
+    const parsedUA = parseUserAgent(UserAgent);
+
     return {
       DMChannelVoiceStatusSync: 0,
       captchaRetryLimit: 3,
@@ -196,23 +199,15 @@ class Options extends null {
           os: 'Windows',
           browser: 'Discord Client',
           release_channel: 'stable',
-          client_version:
-            UserAgent.split(' ')
-              .find(x => x.startsWith('discord/'))
-              ?.split('/')[1] || // Extract the Discord version from the UserAgent string
-            '1.0.9243',
+          client_version: parsedUA.discordVersion,
           os_version: '10.0.19045',
-          os_arch: 'x64',
-          app_arch: 'x64',
+          os_arch: parsedUA.arch,
+          app_arch: parsedUA.arch,
           system_locale: 'en-US',
           has_client_mods: false,
           client_launch_id: randomUUID(),
           browser_user_agent: UserAgent,
-          browser_version:
-            UserAgent.split(' ')
-              .find(x => x.startsWith('Electron/'))
-              ?.split('/')[1] || // Extract the Electron version from the UserAgent string
-            '37.6.0',
+          browser_version: parsedUA.electronVersion,
           os_sdk_version: '19045',
           client_build_number: 570702,
           native_build_number: 84934,
