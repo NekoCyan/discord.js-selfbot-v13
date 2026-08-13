@@ -33,7 +33,7 @@ const VoiceRegion = require('../structures/VoiceRegion');
 const Webhook = require('../structures/Webhook');
 const Widget = require('../structures/Widget');
 const Application = require('../structures/interfaces/Application');
-const { Events, Status } = require('../util/Constants');
+const { Events, Status, ChannelTypes } = require('../util/Constants');
 const DataResolver = require('../util/DataResolver');
 const Intents = require('../util/Intents');
 const DiscordAuthWebsocket = require('../util/RemoteAuth');
@@ -615,7 +615,12 @@ class Client extends BaseClient {
     if (i.guild?.id && this.guilds.cache.has(i.guild?.id)) return this.guilds.cache.get(i.guild?.id);
     if (this.channels.cache.has(i.channelId)) return this.channels.cache.get(i.channelId);
     const data = await this.api.invites(code).post({
-      DiscordContext: { location: 'Markdown Link' },
+      DiscordContext: {
+        location: 'Join Guild',
+        location_guild_id: i.guild.id,
+        location_channel_id: i.channel.id,
+        location_channel_type: ChannelTypes[i.channel.type],
+      },
       data: {
         session_id: this.sessionId,
       },
