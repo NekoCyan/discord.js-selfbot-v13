@@ -407,6 +407,12 @@ class Sweepers {
     let items = 0;
 
     for (const guild of this.client.guilds.cache.values()) {
+      /**
+       * If the guild doesn't have the property, skip it.
+       * This can happen if the guild is unavailable or
+       * if the property is not present on the guild.
+       */
+      if (typeof guild?.[key] === 'undefined') continue;
       const { cache } = guild[key];
 
       guilds++;
